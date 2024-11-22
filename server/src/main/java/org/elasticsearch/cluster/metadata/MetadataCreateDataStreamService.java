@@ -205,7 +205,8 @@ public class MetadataCreateDataStreamService {
      * @param request The create data stream request
      * @param backingIndices List of backing indices. May be empty
      * @param writeIndex Write index for the data stream. If null, a new write index will be created.
-     * @param initializeFailureStore Whether the failure store should be initialized
+     * @param initializeFailureStore Whether the failure store should be initialized (N.B. if true, failure store index creation will be
+     *     performed regardless of whether the template indicates that the failure store is enabled)
      * @return Cluster state containing the new data stream
      */
     static ClusterState createDataStream(
@@ -263,9 +264,11 @@ public class MetadataCreateDataStreamService {
         final long initialGeneration = 1;
 
         // If we need to create a failure store, do so first. Do not reroute during the creation since we will do
-        // that as part of creating the backing index if required.
+        // that as part of creating the backing index if required. N.B. This is done if initializeFailureStore,
+        // regardless of whether the template indicates that the failure store is enabled: it is the caller's
+        // responsibility to check that before setting.
         IndexMetadata failureStoreIndex = null;
-        if (template.getDataStreamTemplate().hasFailureStore() && initializeFailureStore) {
+        if (initializeFailureStore) {
             if (isSystem) {
                 throw new IllegalArgumentException("Failure stores are not supported on system data streams");
             }
