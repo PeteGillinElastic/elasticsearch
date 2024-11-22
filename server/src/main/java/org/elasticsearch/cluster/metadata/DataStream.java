@@ -420,11 +420,25 @@ public final class DataStream implements SimpleDiffable<DataStream>, ToXContentO
     }
 
     /**
-     * Determines if this data stream has its failure store enabled or not. Currently, the failure store
-     * is enabled only when a user has explicitly requested it.
-     * @return true, if the user has explicitly enabled the failure store.
+     * Determines if this data stream has its failure store enabled or not. TODO(pete): Update this
      */
     public boolean isFailureStoreEnabled() {
+        // TODO(pete): Figure out how to get settings object in here
+        return isFailureStoreExplicitlyEnabled(); // || isFailureStoreEnabledBySetting(name);
+    }
+
+    public static boolean isFailureStoreEnabledBySetting(
+        String name,
+        DataStreamFailureStoreGlobalEnablingSettings dataStreamFailureStoreGlobalEnablingSettings
+    ) {
+        // TODO(pete): Think about caching this
+        // TODO(pete): Exclude system and dot-prefix indexes
+        boolean ret = dataStreamFailureStoreGlobalEnablingSettings.failureStoreEnabledForDataStreamName(name);
+        System.out.printf("***** isFailureStoreEnabledBySetting returning %s for %s%n", ret, name);
+        return ret;
+    }
+
+    private boolean isFailureStoreExplicitlyEnabled() {
         return dataStreamOptions.failureStore() != null && dataStreamOptions.failureStore().isExplicitlyEnabled();
     }
 
