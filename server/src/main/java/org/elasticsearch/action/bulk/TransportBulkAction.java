@@ -679,9 +679,7 @@ public class TransportBulkAction extends TransportAbstractBulkAction {
                 // Check if the data stream has the failure store enabled
                 boolean ret1 = composableIndexTemplate.getDataStreamTemplate().hasFailureStore();
                 boolean ret2 = DataStream.isFailureStoreEnabledBySetting(indexName, dataStreamFailureStoreGlobalEnablingSettings);
-                // TODO: FOR NEXT COMMIT
-                // boolean ret = ret1 || ret2;
-                boolean ret = ret1;
+                boolean ret = ret1 || ret2;
                 System.out.printf(
                     "***** resolveFailureStoreFromTemplate gets %s from template, %s from settings, returns %s for indexName=%s%n",
                     ret1,
