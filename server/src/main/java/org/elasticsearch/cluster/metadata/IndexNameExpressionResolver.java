@@ -611,7 +611,7 @@ public class IndexNameExpressionResolver {
         IndicesOptions options = context.getOptions();
         if (DataStream.isFailureStoreFeatureFlagEnabled() && context.options.allowFailureIndices() == false) {
             DataStream parentDataStream = context.getState().metadata().getIndicesLookup().get(index.getName()).getParentDataStream();
-            if (parentDataStream != null && parentDataStream.isFailureStoreEnabled()) {
+            if (parentDataStream != null && parentDataStream.isFailureStoreEnabled()) { // TODO(pete): Figure out right behaviour here
                 if (parentDataStream.isFailureStoreIndex(index.getName())) {
                     if (options.ignoreUnavailable()) {
                         return false;

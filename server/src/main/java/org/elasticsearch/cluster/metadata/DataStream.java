@@ -39,7 +39,6 @@ import org.elasticsearch.index.IndexSettings;
 import org.elasticsearch.index.mapper.DateFieldMapper;
 import org.elasticsearch.logging.LogManager;
 import org.elasticsearch.logging.Logger;
-import org.elasticsearch.logging.internal.spi.LoggerFactory;
 import org.elasticsearch.xcontent.ConstructingObjectParser;
 import org.elasticsearch.xcontent.ParseField;
 import org.elasticsearch.xcontent.ToXContentObject;
@@ -429,21 +428,18 @@ public final class DataStream implements SimpleDiffable<DataStream>, ToXContentO
     /**
      * Determines if this data stream has its failure store enabled or not.
      */
-    @Deprecated // TODO(pete): Move callers over to other method which applies settings
+    @Deprecated // TODO(pete): Move callers over to other method which applies settings - or else to the one which explicitly doesn't.
     public boolean isFailureStoreEnabled() {
-        logger.info(
-            "***** settings check not yet implemented, failure store bit in metadata is {} for {}",
-            isFailureStoreExplicitlyEnabled(),
-            name
-        );
-        return isFailureStoreExplicitlyEnabled();
+        boolean ret = isFailureStoreExplicitlyEnabled();
+        logger.info("***** settings check not yet implemented, failure store bit in metadata is {} for {}", ret, name);
+        return ret;
     }
 
     public boolean isFailureStoreEnabled(DataStreamFailureStoreGlobalEnablingSettings settings) {
         return isFailureStoreExplicitlyEnabled() || settings.failureStoreEnabledForDataStreamName(name);
     }
 
-    private boolean isFailureStoreExplicitlyEnabled() {
+    public boolean isFailureStoreExplicitlyEnabled() {
         return dataStreamOptions.failureStore() != null && dataStreamOptions.failureStore().isExplicitlyEnabled();
     }
 
@@ -1097,7 +1093,7 @@ public final class DataStream implements SimpleDiffable<DataStream>, ToXContentO
         }
         if (out.getTransportVersion()
             .between(DataStream.ADDED_FAILURE_STORE_TRANSPORT_VERSION, TransportVersions.ADD_DATA_STREAM_OPTIONS)) {
-            out.writeBoolean(isFailureStoreEnabled());
+            out.writeBoolean(isFailureStoreExplicitlyEnabled());
         }
         if (out.getTransportVersion().onOrAfter(DataStream.ADDED_FAILURE_STORE_TRANSPORT_VERSION)) {
             out.writeCollection(failureIndices.indices);

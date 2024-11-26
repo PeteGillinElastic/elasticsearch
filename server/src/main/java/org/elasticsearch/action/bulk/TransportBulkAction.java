@@ -84,7 +84,7 @@ public class TransportBulkAction extends TransportAbstractBulkAction {
     private final IndexNameExpressionResolver indexNameExpressionResolver;
     private final OriginSettingClient rolloverClient;
     private final FailureStoreMetrics failureStoreMetrics;
-    private final DataStreamFailureStoreGlobalEnablingSettings dataStreamFailureStoreGlobalEnablingSettings;
+    private final DataStreamFailureStoreGlobalEnablingSettings failureStoreGlobalEnablingSettings;
 
     @Inject
     public TransportBulkAction(
@@ -99,7 +99,7 @@ public class TransportBulkAction extends TransportAbstractBulkAction {
         IndexingPressure indexingPressure,
         SystemIndices systemIndices,
         FailureStoreMetrics failureStoreMetrics,
-        DataStreamFailureStoreGlobalEnablingSettings dataStreamFailureStoreGlobalEnablingSettings
+        DataStreamFailureStoreGlobalEnablingSettings failureStoreGlobalEnablingSettings
     ) {
         this(
             threadPool,
@@ -114,7 +114,7 @@ public class TransportBulkAction extends TransportAbstractBulkAction {
             systemIndices,
             threadPool::relativeTimeInNanos,
             failureStoreMetrics,
-            dataStreamFailureStoreGlobalEnablingSettings
+            failureStoreGlobalEnablingSettings
         );
     }
 
@@ -131,7 +131,7 @@ public class TransportBulkAction extends TransportAbstractBulkAction {
         SystemIndices systemIndices,
         LongSupplier relativeTimeProvider,
         FailureStoreMetrics failureStoreMetrics,
-        DataStreamFailureStoreGlobalEnablingSettings dataStreamFailureStoreGlobalEnablingSettings
+        DataStreamFailureStoreGlobalEnablingSettings failureStoreGlobalEnablingSettings
     ) {
         this(
             TYPE,
@@ -148,7 +148,7 @@ public class TransportBulkAction extends TransportAbstractBulkAction {
             systemIndices,
             relativeTimeProvider,
             failureStoreMetrics,
-            dataStreamFailureStoreGlobalEnablingSettings
+            failureStoreGlobalEnablingSettings
         );
     }
 
@@ -167,7 +167,7 @@ public class TransportBulkAction extends TransportAbstractBulkAction {
         SystemIndices systemIndices,
         LongSupplier relativeTimeProvider,
         FailureStoreMetrics failureStoreMetrics,
-        DataStreamFailureStoreGlobalEnablingSettings dataStreamFailureStoreGlobalEnablingSettings
+        DataStreamFailureStoreGlobalEnablingSettings failureStoreGlobalEnablingSettings
     ) {
         super(
             bulkAction,
@@ -181,7 +181,7 @@ public class TransportBulkAction extends TransportAbstractBulkAction {
             systemIndices,
             relativeTimeProvider
         );
-        this.dataStreamFailureStoreGlobalEnablingSettings = dataStreamFailureStoreGlobalEnablingSettings;
+        this.failureStoreGlobalEnablingSettings = failureStoreGlobalEnablingSettings;
         Objects.requireNonNull(relativeTimeProvider);
         this.featureService = featureService;
         this.client = client;
@@ -594,7 +594,8 @@ public class TransportBulkAction extends TransportAbstractBulkAction {
             relativeTimeNanosProvider,
             startTimeNanos,
             listener,
-            failureStoreMetrics
+            failureStoreMetrics,
+            failureStoreGlobalEnablingSettings
         ).run();
     }
 
@@ -625,7 +626,7 @@ public class TransportBulkAction extends TransportAbstractBulkAction {
      * @param epochMillis A timestamp to use when resolving date math in the index name.
      * @return true if the given index name corresponds to an existing data stream with a failure store enabled.
      */
-    private static Boolean resolveFailureStoreFromMetadata(String indexName, Metadata metadata, long epochMillis) {
+    private Boolean resolveFailureStoreFromMetadata(String indexName, Metadata metadata, long epochMillis) {
         if (indexName == null) {
             return null;
         }
@@ -647,7 +648,7 @@ public class TransportBulkAction extends TransportAbstractBulkAction {
         // not when directly writing to backing indices/failure stores
         DataStream targetDataStream = DataStream.resolveDataStream(indexAbstraction, metadata);
 
-        boolean ret = targetDataStream != null && targetDataStream.isFailureStoreEnabled();
+        boolean ret = targetDataStream != null && targetDataStream.isFailureStoreEnabled(failureStoreGlobalEnablingSettings);
         logger.info(
             "***** resolveFailureStoreFromMetadata targetDataStream.name={} enabled={} for indexName={}",
             targetDataStream == null ? null : targetDataStream.getName(),
@@ -679,7 +680,7 @@ public class TransportBulkAction extends TransportAbstractBulkAction {
             if (composableIndexTemplate.getDataStreamTemplate() != null) {
                 // Check if the data stream has the failure store enabled
                 boolean ret1 = composableIndexTemplate.getDataStreamTemplate().hasFailureStore();
-                boolean ret2 = dataStreamFailureStoreGlobalEnablingSettings.failureStoreEnabledForDataStreamName(indexName);
+                boolean ret2 = failureStoreGlobalEnablingSettings.failureStoreEnabledForDataStreamName(indexName);
                 boolean ret = ret1 || ret2;
                 logger.info(
                     "***** resolveFailureStoreFromTemplate gets {} from template, {} from settings, returns {} for indexName={}",
@@ -691,7 +692,8 @@ public class TransportBulkAction extends TransportAbstractBulkAction {
                 return ret;
             } else {
                 logger.info(
-                    "***** resolveFailureStoreFromTemplate null because composableIndexTemplate.getDataStreamTemplate()=null for indexName={}",
+                    "***** resolveFailureStoreFromTemplate null because "
+                        + "composableIndexTemplate.getDataStreamTemplate()=null for indexName={}",
                     indexName
                 );
             }

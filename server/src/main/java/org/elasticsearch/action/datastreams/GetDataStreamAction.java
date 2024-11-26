@@ -398,6 +398,7 @@ public class GetDataStreamAction extends ActionType<GetDataStreamAction.Response
                 }
                 if (DataStream.isFailureStoreFeatureFlagEnabled()) {
                     builder.startObject(DataStream.FAILURE_STORE_FIELD.getPreferredName());
+                    // TODO(pete): Figure out right behaviour here:
                     builder.field(FAILURE_STORE_ENABLED.getPreferredName(), dataStream.isFailureStoreEnabled());
                     builder.field(
                         DataStream.ROLLOVER_ON_WRITE_FIELD.getPreferredName(),

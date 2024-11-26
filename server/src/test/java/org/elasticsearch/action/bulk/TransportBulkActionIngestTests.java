@@ -27,6 +27,7 @@ import org.elasticsearch.cluster.ClusterStateApplier;
 import org.elasticsearch.cluster.block.ClusterBlocks;
 import org.elasticsearch.cluster.metadata.AliasMetadata;
 import org.elasticsearch.cluster.metadata.ComposableIndexTemplate;
+import org.elasticsearch.cluster.metadata.DataStreamFailureStoreGlobalEnablingSettings;
 import org.elasticsearch.cluster.metadata.IndexMetadata;
 import org.elasticsearch.cluster.metadata.IndexTemplateMetadata;
 import org.elasticsearch.cluster.metadata.Metadata;
@@ -35,6 +36,7 @@ import org.elasticsearch.cluster.node.DiscoveryNode;
 import org.elasticsearch.cluster.node.DiscoveryNodes;
 import org.elasticsearch.cluster.service.ClusterService;
 import org.elasticsearch.common.TriConsumer;
+import org.elasticsearch.common.settings.ClusterSettings;
 import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.common.util.concurrent.AtomicArray;
 import org.elasticsearch.core.Nullable;
@@ -156,7 +158,8 @@ public class TransportBulkActionIngestTests extends ESTestCase {
                 TestIndexNameExpressionResolver.newInstance(),
                 new IndexingPressure(SETTINGS),
                 EmptySystemIndices.INSTANCE,
-                FailureStoreMetrics.NOOP
+                FailureStoreMetrics.NOOP,
+                DataStreamFailureStoreGlobalEnablingSettings.create(ClusterSettings.createBuiltInClusterSettings())
             );
         }
 

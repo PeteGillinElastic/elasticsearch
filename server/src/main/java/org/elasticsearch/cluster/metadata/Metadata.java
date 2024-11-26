@@ -2535,7 +2535,7 @@ public class Metadata implements Iterable<IndexMetadata>, Diffable<Metadata>, Ch
             assert parent == null
                 || parent.getIndices().stream().anyMatch(index -> indexMetadata.getIndex().getName().equals(index.getName()))
                 || (DataStream.isFailureStoreFeatureFlagEnabled()
-                    && parent.isFailureStoreEnabled()
+                    && parent.isFailureStoreEnabled() // TODO(pete): Figure out right behaviour here
                     && parent.getFailureIndices()
                         .getIndices()
                         .stream()
@@ -2561,6 +2561,7 @@ public class Metadata implements Iterable<IndexMetadata>, Diffable<Metadata>, Ch
                 for (Index i : dataStream.getIndices()) {
                     indexToDataStreamLookup.put(i.getName(), dataStream);
                 }
+                // TODO(pete): Figure out right behaviour here:
                 if (DataStream.isFailureStoreFeatureFlagEnabled() && dataStream.isFailureStoreEnabled()) {
                     for (Index i : dataStream.getFailureIndices().getIndices()) {
                         indexToDataStreamLookup.put(i.getName(), dataStream);
