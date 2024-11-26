@@ -28,7 +28,7 @@ public class DataStreamFailureStoreGlobalEnablingSettings {
     private static final Logger logger = LogManager.getLogger(DataStreamFailureStoreGlobalEnablingSettings.class);
 
     // TODO(pete): Finalize name
-    // TODO(pete): Add exclude option
+    // TODO(pete): Maybe add exclude option
     public static final Setting<List<String>> FAILURE_STORE_ENABLING_PATTERNS = Setting.stringListSetting(
         "data_streams.failure_store.enabled_patterns",
         Setting.Property.Dynamic,
@@ -50,7 +50,11 @@ public class DataStreamFailureStoreGlobalEnablingSettings {
     }
 
     public boolean failureStoreEnabledForDataStreamName(String name) {
-        return enablingMatcher != null && enablingMatcher.test(name);
+        // TODO(pete): Think about caching this
+        // TODO(pete): Exclude system and dot-prefix indexes
+        boolean ret = enablingMatcher != null && enablingMatcher.test(name);
+        logger.info("***** failureStoreEnabledForDataStreamName returning {} for {}", ret, name);
+        return ret;
     }
 
     private void setEnablingPatterns(List<String> patterns) {

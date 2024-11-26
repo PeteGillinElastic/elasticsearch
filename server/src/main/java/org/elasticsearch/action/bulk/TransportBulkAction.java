@@ -634,8 +634,8 @@ public class TransportBulkAction extends TransportAbstractBulkAction {
         IndexAbstraction indexAbstraction = metadata.getIndicesLookup()
             .get(IndexNameExpressionResolver.resolveDateMathExpression(indexName, epochMillis));
         if (indexAbstraction == null || indexAbstraction.isDataStreamRelated() == false) {
-            System.out.printf(
-                "***** resolveFailureStoreFromMetadata null because indexAbstraction=%s isDataStreamRelated=%s for indexName=%s%n",
+            logger.info(
+                "***** resolveFailureStoreFromMetadata null because indexAbstraction={} isDataStreamRelated={} for indexName={}",
                 indexAbstraction,
                 indexAbstraction != null && indexAbstraction.isDataStreamRelated(),
                 indexName
@@ -647,14 +647,15 @@ public class TransportBulkAction extends TransportAbstractBulkAction {
         // not when directly writing to backing indices/failure stores
         DataStream targetDataStream = DataStream.resolveDataStream(indexAbstraction, metadata);
 
-        System.out.printf(
-            "***** resolveFailureStoreFromMetadata targetDataStream%s enabled=%s for indexName=%s%n",
-            targetDataStream,
-            targetDataStream != null && targetDataStream.isFailureStoreEnabled(),
+        boolean ret = targetDataStream != null && targetDataStream.isFailureStoreEnabled();
+        logger.info(
+            "***** resolveFailureStoreFromMetadata targetDataStream.name={} enabled={} for indexName={}",
+            targetDataStream == null ? null : targetDataStream.getName(),
+            ret,
             indexName
         );
         // We will store the failure if the write target belongs to a data stream with a failure store.
-        return targetDataStream != null && targetDataStream.isFailureStoreEnabled();
+        return ret;
     }
 
     /**
@@ -665,7 +666,7 @@ public class TransportBulkAction extends TransportAbstractBulkAction {
      */
     private Boolean resolveFailureStoreFromTemplate(String indexName, Metadata metadata) {
         if (indexName == null) {
-            System.out.printf("***** resolveFailureStoreFromTemplate null because indexName=null%n");
+            logger.info("***** resolveFailureStoreFromTemplate null because indexName=null");
             return null;
         }
 
@@ -678,10 +679,10 @@ public class TransportBulkAction extends TransportAbstractBulkAction {
             if (composableIndexTemplate.getDataStreamTemplate() != null) {
                 // Check if the data stream has the failure store enabled
                 boolean ret1 = composableIndexTemplate.getDataStreamTemplate().hasFailureStore();
-                boolean ret2 = DataStream.isFailureStoreEnabledBySetting(indexName, dataStreamFailureStoreGlobalEnablingSettings);
+                boolean ret2 = dataStreamFailureStoreGlobalEnablingSettings.failureStoreEnabledForDataStreamName(indexName);
                 boolean ret = ret1 || ret2;
-                System.out.printf(
-                    "***** resolveFailureStoreFromTemplate gets %s from template, %s from settings, returns %s for indexName=%s%n",
+                logger.info(
+                    "***** resolveFailureStoreFromTemplate gets {} from template, {} from settings, returns {} for indexName={}",
                     ret1,
                     ret2,
                     ret,
@@ -689,13 +690,13 @@ public class TransportBulkAction extends TransportAbstractBulkAction {
                 );
                 return ret;
             } else {
-                System.out.printf(
-                    "***** resolveFailureStoreFromTemplate null because composableIndexTemplate.getDataStreamTemplate()=null for indexName=%s%n",
+                logger.info(
+                    "***** resolveFailureStoreFromTemplate null because composableIndexTemplate.getDataStreamTemplate()=null for indexName={}",
                     indexName
                 );
             }
         } else {
-            System.out.printf("***** resolveFailureStoreFromTemplate null because template=null for indexName=%s%n", indexName);
+            logger.info("***** resolveFailureStoreFromTemplate null because template=null for indexName={}", indexName);
         }
 
         // Could not locate a failure store via template

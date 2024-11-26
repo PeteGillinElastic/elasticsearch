@@ -37,6 +37,9 @@ import org.elasticsearch.index.Index;
 import org.elasticsearch.index.IndexMode;
 import org.elasticsearch.index.IndexSettings;
 import org.elasticsearch.index.mapper.DateFieldMapper;
+import org.elasticsearch.logging.LogManager;
+import org.elasticsearch.logging.Logger;
+import org.elasticsearch.logging.internal.spi.LoggerFactory;
 import org.elasticsearch.xcontent.ConstructingObjectParser;
 import org.elasticsearch.xcontent.ParseField;
 import org.elasticsearch.xcontent.ToXContentObject;
@@ -419,23 +422,25 @@ public final class DataStream implements SimpleDiffable<DataStream>, ToXContentO
         return allowCustomRouting;
     }
 
+    // TODO(pete): Sort out clear naming and javadoc for all this
+
+    private static final Logger logger = LogManager.getLogger(DataStream.class); // TODO(pete): Move logger to right place or remove
+
     /**
-     * Determines if this data stream has its failure store enabled or not. TODO(pete): Update this
+     * Determines if this data stream has its failure store enabled or not.
      */
+    @Deprecated // TODO(pete): Move callers over to other method which applies settings
     public boolean isFailureStoreEnabled() {
-        // TODO(pete): Figure out how to get settings object in here
-        return isFailureStoreExplicitlyEnabled(); // || isFailureStoreEnabledBySetting(name);
+        logger.info(
+            "***** settings check not yet implemented, failure store bit in metadata is {} for {}",
+            isFailureStoreExplicitlyEnabled(),
+            name
+        );
+        return isFailureStoreExplicitlyEnabled();
     }
 
-    public static boolean isFailureStoreEnabledBySetting(
-        String name,
-        DataStreamFailureStoreGlobalEnablingSettings dataStreamFailureStoreGlobalEnablingSettings
-    ) {
-        // TODO(pete): Think about caching this
-        // TODO(pete): Exclude system and dot-prefix indexes
-        boolean ret = dataStreamFailureStoreGlobalEnablingSettings.failureStoreEnabledForDataStreamName(name);
-        System.out.printf("***** isFailureStoreEnabledBySetting returning %s for %s%n", ret, name);
-        return ret;
+    public boolean isFailureStoreEnabled(DataStreamFailureStoreGlobalEnablingSettings settings) {
+        return isFailureStoreExplicitlyEnabled() || settings.failureStoreEnabledForDataStreamName(name);
     }
 
     private boolean isFailureStoreExplicitlyEnabled() {
