@@ -2535,7 +2535,10 @@ public class Metadata implements Iterable<IndexMetadata>, Diffable<Metadata>, Ch
             assert parent == null
                 || parent.getIndices().stream().anyMatch(index -> indexMetadata.getIndex().getName().equals(index.getName()))
                 || (DataStream.isFailureStoreFeatureFlagEnabled()
-                    && parent.isFailureStoreEnabled() // TODO(pete): Figure out right behaviour here
+                    // TODO(pete): Confirm out right behaviour here - I think this check should probably not check the whether the failure
+                    // store is enabled for the data stream at all, because it shouldn't matter if it was previously but isn't now, but need
+                    // to check this theory - NEEDS INPUT FROM TEAM:
+                    && parent.isFailureStoreEnabled()
                     && parent.getFailureIndices()
                         .getIndices()
                         .stream()
@@ -2561,7 +2564,10 @@ public class Metadata implements Iterable<IndexMetadata>, Diffable<Metadata>, Ch
                 for (Index i : dataStream.getIndices()) {
                     indexToDataStreamLookup.put(i.getName(), dataStream);
                 }
-                // TODO(pete): Figure out right behaviour here:
+                // TODO(pete): Confirm out right behaviour here - it's related to assertContainsIndexIfDataStream above - I think maybe we
+                // can skip checking whether failure store is enabled for the data stream here, too, and just rely on whether the feaure
+                // gate is open and whether it has failure indices (which it could do if the store used to be enabled but isn't any more),
+                // but need to check this theory - NEEDS INPUT FROM TEAM:
                 if (DataStream.isFailureStoreFeatureFlagEnabled() && dataStream.isFailureStoreEnabled()) {
                     for (Index i : dataStream.getFailureIndices().getIndices()) {
                         indexToDataStreamLookup.put(i.getName(), dataStream);

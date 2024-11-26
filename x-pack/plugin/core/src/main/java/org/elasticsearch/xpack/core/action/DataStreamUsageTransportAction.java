@@ -56,7 +56,11 @@ public class DataStreamUsageTransportAction extends XPackUsageFeatureTransportAc
         for (DataStream ds : dataStreams.values()) {
             backingIndicesCounter += ds.getIndices().size();
             if (DataStream.isFailureStoreFeatureFlagEnabled()) {
-                if (ds.isFailureStoreEnabled()) { // TODO(pete): Figure out right behaviour here
+                // TODO(pete): Figure out right behaviour here - this is for the /_xpack/usage API and determines the value of
+                // data_streams.failure_store.enabled_count, and it's not clear whether that should be 'explicitly enabled' or
+                // 'effectively enabled with the current cluster settings'... or even whether we should expose both - thread started at
+                // https://elastic.slack.com/archives/C076436CY2K/p1732642356228629:
+                if (ds.isFailureStoreEnabled()) {
                     failureStoreEnabledCounter++;
                 }
                 if (ds.getFailureIndices().getIndices().isEmpty() == false) {
