@@ -12,6 +12,7 @@ import org.elasticsearch.action.datastreams.GetDataStreamAction;
 import org.elasticsearch.cluster.ClusterName;
 import org.elasticsearch.cluster.ClusterState;
 import org.elasticsearch.cluster.metadata.DataStream;
+import org.elasticsearch.cluster.metadata.DataStreamFailureStoreGlobalEnablingSettings;
 import org.elasticsearch.cluster.metadata.DataStreamGlobalRetention;
 import org.elasticsearch.cluster.metadata.DataStreamGlobalRetentionSettings;
 import org.elasticsearch.cluster.metadata.DataStreamTestHelper;
@@ -48,6 +49,8 @@ public class TransportGetDataStreamsActionTests extends ESTestCase {
     private final DataStreamGlobalRetentionSettings dataStreamGlobalRetentionSettings = DataStreamGlobalRetentionSettings.create(
         ClusterSettings.createBuiltInClusterSettings()
     );
+    private final DataStreamFailureStoreGlobalEnablingSettings failureStoreGlobalEnablingSettings =
+        DataStreamFailureStoreGlobalEnablingSettings.create(ClusterSettings.createBuiltInClusterSettings());
 
     public void testGetDataStream() {
         final String dataStreamName = "my-data-stream";
@@ -166,6 +169,7 @@ public class TransportGetDataStreamsActionTests extends ESTestCase {
             systemIndices,
             ClusterSettings.createBuiltInClusterSettings(),
             dataStreamGlobalRetentionSettings,
+            failureStoreGlobalEnablingSettings,
             null
         );
         assertThat(
@@ -197,6 +201,7 @@ public class TransportGetDataStreamsActionTests extends ESTestCase {
             systemIndices,
             ClusterSettings.createBuiltInClusterSettings(),
             dataStreamGlobalRetentionSettings,
+            failureStoreGlobalEnablingSettings,
             null
         );
         assertThat(
@@ -248,6 +253,7 @@ public class TransportGetDataStreamsActionTests extends ESTestCase {
             systemIndices,
             ClusterSettings.createBuiltInClusterSettings(),
             dataStreamGlobalRetentionSettings,
+            failureStoreGlobalEnablingSettings,
             null
         );
         assertThat(
@@ -292,6 +298,7 @@ public class TransportGetDataStreamsActionTests extends ESTestCase {
             systemIndices,
             ClusterSettings.createBuiltInClusterSettings(),
             dataStreamGlobalRetentionSettings,
+            failureStoreGlobalEnablingSettings,
             null
         );
 
@@ -338,6 +345,7 @@ public class TransportGetDataStreamsActionTests extends ESTestCase {
             systemIndices,
             ClusterSettings.createBuiltInClusterSettings(),
             dataStreamGlobalRetentionSettings,
+            failureStoreGlobalEnablingSettings,
             null
         );
         assertThat(response.getGlobalRetention(), nullValue());
@@ -363,6 +371,7 @@ public class TransportGetDataStreamsActionTests extends ESTestCase {
             systemIndices,
             ClusterSettings.createBuiltInClusterSettings(),
             withGlobalRetentionSettings,
+            failureStoreGlobalEnablingSettings,
             null
         );
         assertThat(response.getGlobalRetention(), equalTo(globalRetention));

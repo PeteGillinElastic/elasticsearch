@@ -17,7 +17,6 @@ import org.elasticsearch.action.ActionListener;
 import org.elasticsearch.action.ActionRunnable;
 import org.elasticsearch.action.ActionType;
 import org.elasticsearch.action.DocWriteRequest;
-import org.elasticsearch.action.DocWriteRequest.OpType;
 import org.elasticsearch.action.admin.indices.create.AutoCreateAction;
 import org.elasticsearch.action.admin.indices.create.CreateIndexRequest;
 import org.elasticsearch.action.admin.indices.create.CreateIndexResponse;
@@ -35,6 +34,7 @@ import org.elasticsearch.client.internal.node.NodeClient;
 import org.elasticsearch.cluster.ClusterState;
 import org.elasticsearch.cluster.metadata.ComposableIndexTemplate;
 import org.elasticsearch.cluster.metadata.DataStream;
+import org.elasticsearch.cluster.metadata.DataStreamFailureStoreGlobalEnablingSettings;
 import org.elasticsearch.cluster.metadata.DataStreamOptions;
 import org.elasticsearch.cluster.metadata.IndexAbstraction;
 import org.elasticsearch.cluster.metadata.IndexNameExpressionResolver;
@@ -85,6 +85,7 @@ public class TransportBulkAction extends TransportAbstractBulkAction {
     private final IndexNameExpressionResolver indexNameExpressionResolver;
     private final OriginSettingClient rolloverClient;
     private final FailureStoreMetrics failureStoreMetrics;
+    private final DataStreamFailureStoreGlobalEnablingSettings failureStoreGlobalEnablingSettings;
 
     @Inject
     public TransportBulkAction(
@@ -98,7 +99,8 @@ public class TransportBulkAction extends TransportAbstractBulkAction {
         IndexNameExpressionResolver indexNameExpressionResolver,
         IndexingPressure indexingPressure,
         SystemIndices systemIndices,
-        FailureStoreMetrics failureStoreMetrics
+        FailureStoreMetrics failureStoreMetrics,
+        DataStreamFailureStoreGlobalEnablingSettings failureStoreGlobalEnablingSettings
     ) {
         this(
             threadPool,
@@ -112,7 +114,8 @@ public class TransportBulkAction extends TransportAbstractBulkAction {
             indexingPressure,
             systemIndices,
             threadPool::relativeTimeInNanos,
-            failureStoreMetrics
+            failureStoreMetrics,
+            failureStoreGlobalEnablingSettings
         );
     }
 
@@ -128,7 +131,8 @@ public class TransportBulkAction extends TransportAbstractBulkAction {
         IndexingPressure indexingPressure,
         SystemIndices systemIndices,
         LongSupplier relativeTimeProvider,
-        FailureStoreMetrics failureStoreMetrics
+        FailureStoreMetrics failureStoreMetrics,
+        DataStreamFailureStoreGlobalEnablingSettings failureStoreGlobalEnablingSettings
     ) {
         this(
             TYPE,
@@ -144,7 +148,8 @@ public class TransportBulkAction extends TransportAbstractBulkAction {
             indexingPressure,
             systemIndices,
             relativeTimeProvider,
-            failureStoreMetrics
+            failureStoreMetrics,
+            failureStoreGlobalEnablingSettings
         );
     }
 
@@ -162,7 +167,8 @@ public class TransportBulkAction extends TransportAbstractBulkAction {
         IndexingPressure indexingPressure,
         SystemIndices systemIndices,
         LongSupplier relativeTimeProvider,
-        FailureStoreMetrics failureStoreMetrics
+        FailureStoreMetrics failureStoreMetrics,
+        DataStreamFailureStoreGlobalEnablingSettings failureStoreGlobalEnablingSettings
     ) {
         super(
             bulkAction,
@@ -176,6 +182,7 @@ public class TransportBulkAction extends TransportAbstractBulkAction {
             systemIndices,
             relativeTimeProvider
         );
+        this.failureStoreGlobalEnablingSettings = failureStoreGlobalEnablingSettings;
         Objects.requireNonNull(relativeTimeProvider);
         this.featureService = featureService;
         this.client = client;
@@ -282,7 +289,7 @@ public class TransportBulkAction extends TransportAbstractBulkAction {
 
         for (DocWriteRequest<?> request : bulkRequest.requests) {
             // Delete requests should not attempt to create the index (if the index does not exist), unless an external versioning is used.
-            if (request.opType() == OpType.DELETE
+            if (request.opType() == DocWriteRequest.OpType.DELETE
                 && request.versionType() != VersionType.EXTERNAL
                 && request.versionType() != VersionType.EXTERNAL_GTE) {
                 continue;
@@ -492,7 +499,7 @@ public class TransportBulkAction extends TransportAbstractBulkAction {
 
     static void prohibitAppendWritesInBackingIndices(DocWriteRequest<?> writeRequest, IndexAbstraction indexAbstraction) {
         DocWriteRequest.OpType opType = writeRequest.opType();
-        if ((opType == OpType.CREATE || opType == OpType.INDEX) == false) {
+        if ((opType == DocWriteRequest.OpType.CREATE || opType == DocWriteRequest.OpType.INDEX) == false) {
             // op type not create or index, then bail early
             return;
         }
@@ -588,7 +595,8 @@ public class TransportBulkAction extends TransportAbstractBulkAction {
             relativeTimeNanosProvider,
             startTimeNanos,
             listener,
-            failureStoreMetrics
+            failureStoreMetrics,
+            failureStoreGlobalEnablingSettings
         ).run();
     }
 
@@ -596,7 +604,7 @@ public class TransportBulkAction extends TransportAbstractBulkAction {
      * See {@link #resolveFailureStore(String, Metadata, long)}
      */
     // Visibility for testing
-    static Boolean resolveFailureInternal(String indexName, Metadata metadata, long epochMillis) {
+    Boolean resolveFailureInternal(String indexName, Metadata metadata, long epochMillis) {
         if (DataStream.isFailureStoreFeatureFlagEnabled() == false) {
             return null;
         }
@@ -619,7 +627,7 @@ public class TransportBulkAction extends TransportAbstractBulkAction {
      * @param epochMillis A timestamp to use when resolving date math in the index name.
      * @return true if the given index name corresponds to an existing data stream with a failure store enabled.
      */
-    private static Boolean resolveFailureStoreFromMetadata(String indexName, Metadata metadata, long epochMillis) {
+    private Boolean resolveFailureStoreFromMetadata(String indexName, Metadata metadata, long epochMillis) {
         if (indexName == null) {
             return null;
         }
@@ -628,6 +636,12 @@ public class TransportBulkAction extends TransportAbstractBulkAction {
         IndexAbstraction indexAbstraction = metadata.getIndicesLookup()
             .get(IndexNameExpressionResolver.resolveDateMathExpression(indexName, epochMillis));
         if (indexAbstraction == null || indexAbstraction.isDataStreamRelated() == false) {
+            logger.info(
+                "***** resolveFailureStoreFromMetadata null because indexAbstraction={} isDataStreamRelated={} for indexName={}",
+                indexAbstraction,
+                indexAbstraction != null && indexAbstraction.isDataStreamRelated(),
+                indexName
+            );
             return null;
         }
 
@@ -635,8 +649,15 @@ public class TransportBulkAction extends TransportAbstractBulkAction {
         // not when directly writing to backing indices/failure stores
         DataStream targetDataStream = DataStream.resolveDataStream(indexAbstraction, metadata);
 
+        boolean ret = targetDataStream != null && targetDataStream.isFailureStoreEffectivelyEnabled(failureStoreGlobalEnablingSettings);
+        logger.info(
+            "***** resolveFailureStoreFromMetadata targetDataStream.name={} enabled={} for indexName={}",
+            targetDataStream == null ? null : targetDataStream.getName(),
+            ret,
+            indexName
+        );
         // We will store the failure if the write target belongs to a data stream with a failure store.
-        return targetDataStream != null && targetDataStream.isFailureStoreEnabled();
+        return ret;
     }
 
     /**
@@ -649,8 +670,9 @@ public class TransportBulkAction extends TransportAbstractBulkAction {
      * Visible for testing
      */
     @Nullable
-    static Boolean resolveFailureStoreFromTemplate(String indexName, Metadata metadata) {
+    Boolean resolveFailureStoreFromTemplate(String indexName, Metadata metadata) {
         if (indexName == null) {
+            logger.info("***** resolveFailureStoreFromTemplate null because indexName=null");
             return null;
         }
 
@@ -666,8 +688,23 @@ public class TransportBulkAction extends TransportAbstractBulkAction {
                     composableIndexTemplate,
                     metadata.componentTemplates()
                 ).mapAndGet(DataStreamOptions.Template::toDataStreamOptions);
-                return dataStreamOptions != null && dataStreamOptions.isFailureStoreEnabled();
+                boolean ret = DataStream.isFailureStoreEffectivelyEnabled(
+                    dataStreamOptions,
+                    failureStoreGlobalEnablingSettings,
+                    indexName,
+                    systemIndices
+                );
+                logger.info("***** resolveFailureStoreFromTemplate returning {} from template options", ret);
+                return ret;
+            } else {
+                logger.info(
+                    "***** resolveFailureStoreFromTemplate null because "
+                        + "composableIndexTemplate.getDataStreamTemplate()=null for indexName={}",
+                    indexName
+                );
             }
+        } else {
+            logger.info("***** resolveFailureStoreFromTemplate null because template=null for indexName={}", indexName);
         }
 
         // Could not locate a failure store via template
