@@ -9,7 +9,9 @@
 
 package org.elasticsearch.common;
 
+import static java.lang.Math.abs;
 import static java.lang.Math.exp;
+import static java.lang.Math.expm1;
 
 /**
  * Implements a version of an exponentially weighted moving rate (EWMR). This is a calculation over a finite time series of increments to
@@ -51,15 +53,53 @@ public class TrueExponentiallyWeightedMovingRate {
         return rate;
     }
 
+    /**
+     * Updates the rate to reflect that the gauge has been incremented by an amount {@code increment} at a time {@code timeInMillis} in
+     * milliseconds since the epoch.
+     *
+     * <p>If this is the first increment, we require it to occur after the start time for the rate calculation, i.e. the value of
+     * {@code timeInMillis} must be greater than {@code startTimeInMillis} passed to the constructor. If this is not the case, the method
+     * behaves as if {@code timeInMillis} is {@code startTimeInMillis + 1} to prevent a division by zero error.
+     *
+     * <p>If this is not the first increment, we require it not to occur before the previous increment, i.e. the value of
+     * {@code timeInMillis} for this call must be greater than or equal to the value for the previous call. If this is not the case, the
+     * method behaves as if this call's {@code timeInMillis} is the same as the previous call's.
+     */
     public void addIncrement(double increment, long timeInMillis) {
         if (count == 0) {
-            rate = lambda * increment / (1.0 - exp(-1.0 * lambda * (timeInMillis - startTimeInMillis)));
+            if (timeInMillis <= startTimeInMillis) {
+                timeInMillis = startTimeInMillis + 1;
+            }
+            rate = increment / expHelper(lambda, timeInMillis - startTimeInMillis);
         } else {
-            rate = (lambda * increment + exp(-1.0 * lambda * (timeInMillis - startTimeInMillis)) * (exp(
-                lambda * (lastTimeInMillis - startTimeInMillis)
-            ) - 1.0) * rate) / (1.0 - exp(-1.0 * lambda * (timeInMillis - startTimeInMillis)));
+            if (timeInMillis < lastTimeInMillis) {
+                timeInMillis = lastTimeInMillis;
+            }
+            rate += (increment - expHelper(lambda, timeInMillis - lastTimeInMillis) * rate) / expHelper(
+                lambda,
+                timeInMillis - startTimeInMillis
+            );
         }
         count++;
         lastTimeInMillis = timeInMillis;
+    }
+
+    /**
+     * Returns something mathematically equivalent to {@code (1.0 - exp(-1.0 * lambda * time)) / lambda}, using an implementation which
+     * should not be subject to numerical instability when {@code lambda * time} is small. Returns {@code time} when {@code lambda = 0},
+     * which is the correct limit.
+     */
+    private double expHelper(double lambda, double time) {
+        double lambdaTime = lambda * time;
+        if (abs(lambdaTime) >= 1.0e-2) {
+            // The direct calculation should be fine here:
+            return (1.0 - exp(-1.0 * lambdaTime)) / lambda;
+        } else if (abs(lambdaTime) >= 1.0e-10) {
+            // Avoid taking the small difference of two similar quantities by using expm1 here:
+            return -1.0 * expm1(-1.0 * lambdaTime) / lambda;
+        } else {
+            // Use the approximation exp(-1.0 * lambdaTime) = 1.0 - lambdaTime + 0.5 * lambdaTime * lambdaTime here (works for lambda = 0):
+            return time * (1.0 - 0.5 * lambdaTime);
+        }
     }
 }
