@@ -9,7 +9,6 @@
 
 package org.elasticsearch.common;
 
-import static java.lang.Math.abs;
 import static java.lang.Math.exp;
 import static java.lang.Math.expm1;
 
@@ -32,13 +31,18 @@ public class TrueExponentiallyWeightedMovingRate {
     long lastTimeInMillis;
 
     /**
-     * Constructs an instance with a given value of {@code lambda}, the parameter which dictates how quickly the average "forgets" older
-     * increments. The weight given to an increment which happened a time {@code timeAgo} milliseconds ago will be proportional to
-     * {@code exp(-1.0 * lambda * timeAgo)}. The half-life (measured in milliseconds) is related to this parameter by the equation
-     * {@code exp(-1.0 * lambda * halfLife)} = 0.5}, so {@code lambda = log(2.0) / halfLife)}. The parameter {@code startTimeInMillis} gives
-     * the time, in milliseconds since the epoch, to consider the start time for the rate calculation.
+     * Constructor.
+     *
+     * @param lambda A parameter which dictates how quickly the average "forgets" older increments. The weight given to an increment which
+     *     happened a time {@code timeAgo} milliseconds ago will be proportional to {@code exp(-1.0 * lambda * timeAgo)}. The half-life
+     *     (measured in milliseconds) is related to this parameter by the equation {@code exp(-1.0 * lambda * halfLife)} = 0.5}, so
+     *     {@code lambda = log(2.0) / halfLife)}. This may be zero, but must not be negative.
+     * @param startTimeInMillis The time, in milliseconds since the epoch, to consider the start time for the rate calculation.
      */
     public TrueExponentiallyWeightedMovingRate(double lambda, long startTimeInMillis) {
+        if (lambda < 0.0) {
+            throw new IllegalArgumentException("lambda must be non-negative but was " + lambda);
+        }
         this.lambda = lambda;
         this.count = 0;
         this.rate = Double.NaN;
@@ -90,15 +94,17 @@ public class TrueExponentiallyWeightedMovingRate {
      * which is the correct limit.
      */
     private double expHelper(double lambda, double time) {
+        assert lambda >= 0.0;
+        assert time >= 0.0;
         double lambdaTime = lambda * time;
-        if (abs(lambdaTime) >= 1.0e-2) {
+        if (lambdaTime >= 1.0e-2) {
             // The direct calculation should be fine here:
             return (1.0 - exp(-1.0 * lambdaTime)) / lambda;
-        } else if (abs(lambdaTime) >= 1.0e-10) {
+        } else if (lambdaTime >= 1.0e-10) {
             // Avoid taking the small difference of two similar quantities by using expm1 here:
             return -1.0 * expm1(-1.0 * lambdaTime) / lambda;
         } else {
-            // Use the approximation exp(-1.0 * lambdaTime) = 1.0 - lambdaTime + 0.5 * lambdaTime * lambdaTime here (works for lambda = 0):
+            // Approximate exp(-1.0 * lambdaTime) = 1.0 - lambdaTime + 0.5 * lambdaTime * lambdaTime here (also works for lambda = 0):
             return time * (1.0 - 0.5 * lambdaTime);
         }
     }
