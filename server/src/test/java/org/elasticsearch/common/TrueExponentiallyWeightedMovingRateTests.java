@@ -56,18 +56,18 @@ public class TrueExponentiallyWeightedMovingRateTests extends ESTestCase {
     public void testEwmr_longGapBetweenValues_higherRecentValue() {
         TrueExponentiallyWeightedMovingRate ewmr = new TrueExponentiallyWeightedMovingRate(LAMBDA, START_TIME_IN_MILLIS);
         ewmr.addIncrement(10.0, START_TIME_IN_MILLIS + 1000);
-        ewmr.addIncrement(20.0, START_TIME_IN_MILLIS + 2_000_000);
-        double expected2000000 = LAMBDA * (20.0 + 10.0 * exp(-1.0 * LAMBDA * 1_999_000)) / (1.0 - exp(-1.0 * LAMBDA * 2_000_000));
-        // 0.000021... (more than 30 / 2000000 = 0.000015 because the gap is twice the half-life and we favour the recent increment)
+        ewmr.addIncrement(30.0, START_TIME_IN_MILLIS + 2_000_000);
+        double expected2000000 = LAMBDA * (30.0 + 10.0 * exp(-1.0 * LAMBDA * 1_999_000)) / (1.0 - exp(-1.0 * LAMBDA * 2_000_000));
+        // 0.000030... (more than 40 / 2000000 = 0.000020 because the gap is twice the half-life and we favour the larger recent increment)
         assertThat(ewmr.getRate(START_TIME_IN_MILLIS + 2_000_000), closeTo(expected2000000, TOLERANCE));
     }
 
     public void testEwmr_longGapBetweenValues_lowerRecentValue() {
         TrueExponentiallyWeightedMovingRate ewmr = new TrueExponentiallyWeightedMovingRate(LAMBDA, START_TIME_IN_MILLIS);
-        ewmr.addIncrement(20.0, START_TIME_IN_MILLIS + 1000);
+        ewmr.addIncrement(30.0, START_TIME_IN_MILLIS + 1000);
         ewmr.addIncrement(10.0, START_TIME_IN_MILLIS + 2_000_000);
-        double expected2000000 = LAMBDA * (10.0 + 20.0 * exp(-1.0 * LAMBDA * 1_999_000)) / (1.0 - exp(-1.0 * LAMBDA * 2_000_000));
-        // 0.000014... (less than 30 / 2000000 = 0.000015 because the gap is twice the half-life and we favour the recent increment)
+        double expected2000000 = LAMBDA * (10.0 + 30.0 * exp(-1.0 * LAMBDA * 1_999_000)) / (1.0 - exp(-1.0 * LAMBDA * 2_000_000));
+        // 0.000016... (less than 40 / 2000000 = 0.000020 because the gap is twice the half-life and we favour the smaller recent increment)
         assertThat(ewmr.getRate(START_TIME_IN_MILLIS + 2_000_000), closeTo(expected2000000, TOLERANCE));
     }
 
@@ -87,7 +87,7 @@ public class TrueExponentiallyWeightedMovingRateTests extends ESTestCase {
         double expected2000000 = LAMBDA * (8.0 * exp(-1.0 * LAMBDA * 1_997_500) + 12.0 * exp(-1.0 * LAMBDA * 1_998_000) + 10.0 * exp(
             -1.0 * LAMBDA * 1_999_000
         )) / (1.0 - exp(-1.0 * LAMBDA * 2_000_000));
-        // 0.0000069... (less than 30 / 2000000 = 0.000015 because the updates were nearly two half-lives ago)
+        // 0.000007... (less than 30 / 2000000 = 0.000015 because the updates were nearly two half-lives ago)
         assertThat(ewmr.getRate(START_TIME_IN_MILLIS + 2_000_000), closeTo(expected2000000, TOLERANCE));
     }
 
