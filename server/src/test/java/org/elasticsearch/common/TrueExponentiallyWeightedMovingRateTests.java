@@ -26,18 +26,18 @@ public class TrueExponentiallyWeightedMovingRateTests extends ESTestCase {
     public void testEwmr() {
         TrueExponentiallyWeightedMovingRate ewmr = new TrueExponentiallyWeightedMovingRate(LAMBDA, START_TIME_IN_MILLIS);
         assertThat(ewmr.getRate(START_TIME_IN_MILLIS), equalTo(0.0));
-        assertThat(ewmr.getRate((long) START_TIME_IN_MILLIS + 900), equalTo(0.0));
-        ewmr.addIncrement(10.0, (long) START_TIME_IN_MILLIS + 1000);
+        assertThat(ewmr.getRate(START_TIME_IN_MILLIS + 900), equalTo(0.0));
+        ewmr.addIncrement(10.0, START_TIME_IN_MILLIS + 1000);
         double expected1000 = LAMBDA * 10.0 / (1.0 - exp(-1.0 * LAMBDA * 1000)); // 0.010003... (~= 10 / 1000)
-        assertThat(ewmr.getRate((long) START_TIME_IN_MILLIS + 1000), closeTo(expected1000, TOLERANCE));
+        assertThat(ewmr.getRate(START_TIME_IN_MILLIS + 1000), closeTo(expected1000, TOLERANCE));
         double expected1900 = LAMBDA * 10.0 * exp(-1.0 * LAMBDA * 900) / (1.0 - exp(-1.0 * LAMBDA * 1900)); // 0.005263... (~= 10 / 1900)
-        assertThat(ewmr.getRate((long) START_TIME_IN_MILLIS + 1900), closeTo(expected1900, TOLERANCE));
-        ewmr.addIncrement(12.0, (long) START_TIME_IN_MILLIS + 2000);
-        ewmr.addIncrement(8.0, (long) START_TIME_IN_MILLIS + 2500);
+        assertThat(ewmr.getRate(START_TIME_IN_MILLIS + 1900), closeTo(expected1900, TOLERANCE));
+        ewmr.addIncrement(12.0, START_TIME_IN_MILLIS + 2000);
+        ewmr.addIncrement(8.0, START_TIME_IN_MILLIS + 2500);
         double expected2500 = LAMBDA * (8.0 + 12.0 * exp(-1.0 * LAMBDA * 500) + 10.0 * exp(-1.0 * LAMBDA * 1500)) / (1.0 - exp(
             -1.0 * LAMBDA * 2500
         )); // 0.012005... (~= 30 / 2500)
-        assertThat(ewmr.getRate((long) START_TIME_IN_MILLIS + 2500), closeTo(expected2500, TOLERANCE));
+        assertThat(ewmr.getRate(START_TIME_IN_MILLIS + 2500), closeTo(expected2500, TOLERANCE));
     }
 
     public void testEwmr_longSeriesEvenRate() {
