@@ -22,11 +22,9 @@ import static java.lang.Math.expm1;
 public class TrueExponentiallyWeightedMovingRate {
 
     // TODO: Think about thread safety.
-    // TODO: Think about numerical stability, especially in the case of small alpha, and especially especially in the case of alpha = 0.
 
     private final double lambda;
     private final long startTimeInMillis;
-    private int count;
     private double rate;
     long lastTimeInMillis;
 
@@ -37,16 +35,20 @@ public class TrueExponentiallyWeightedMovingRate {
      *     happened a time {@code timeAgo} milliseconds ago will be proportional to {@code exp(-1.0 * lambda * timeAgo)}. The half-life
      *     (measured in milliseconds) is related to this parameter by the equation {@code exp(-1.0 * lambda * halfLife)} = 0.5}, so
      *     {@code lambda = log(2.0) / halfLife)}. This may be zero, but must not be negative.
-     * @param startTimeInMillis The time, in milliseconds since the epoch, to consider the start time for the rate calculation.
+     * @param startTimeInMillis The time, in milliseconds since the epoch, to consider the start time for the rate calculation. This must be
+     *     greater than zero.
      */
     public TrueExponentiallyWeightedMovingRate(double lambda, long startTimeInMillis) {
         if (lambda < 0.0) {
             throw new IllegalArgumentException("lambda must be non-negative but was " + lambda);
         }
+        if (startTimeInMillis <= 0.0) {
+            throw new IllegalArgumentException("lambda must be non-negative but was " + startTimeInMillis);
+        }
         this.lambda = lambda;
-        this.count = 0;
-        this.rate = Double.NaN;
+        this.rate = Double.NaN; // should never be used
         this.startTimeInMillis = startTimeInMillis;
+        this.lastTimeInMillis = 0; // after an increment, this must be positive, so a zero value indicates we're waiting for the first one
     }
 
     /**
@@ -59,7 +61,7 @@ public class TrueExponentiallyWeightedMovingRate {
      * case, the method behaves as if it had that minimum value.
      */
     public double getRate(long timeInMillis) {
-        if (count == 0) {
+        if (lastTimeInMillis == 0) { // indicates that no increment has happened yet
             return 0.0;
         } else if (timeInMillis <= lastTimeInMillis) {
             return rate;
@@ -82,7 +84,7 @@ public class TrueExponentiallyWeightedMovingRate {
      * method behaves as if this call's {@code timeInMillis} is the same as the previous call's.
      */
     public void addIncrement(double increment, long timeInMillis) {
-        if (count == 0) {
+        if (lastTimeInMillis == 0) { // indicates that this is the first increment
             if (timeInMillis <= startTimeInMillis) {
                 timeInMillis = startTimeInMillis + 1;
             }
@@ -96,7 +98,6 @@ public class TrueExponentiallyWeightedMovingRate {
                 timeInMillis - startTimeInMillis
             );
         }
-        count++;
         lastTimeInMillis = timeInMillis;
     }
 

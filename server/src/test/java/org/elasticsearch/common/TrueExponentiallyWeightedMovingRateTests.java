@@ -125,7 +125,7 @@ public class TrueExponentiallyWeightedMovingRateTests extends ESTestCase {
         assertThat(ewmr.getRate(startTimeInMillis), closeTo(expected, TOLERANCE));
     }
 
-    public void testEwmr_timeFlowsBackwards() {
+    public void testEwmr_timeFlowsBackwardsBetweenIncrements() {
         double lambda = 1.0e-6; // equivalent to half-life of log(2.0) * 1.0e6
         long startTimeInMillis = 1234567;
         TrueExponentiallyWeightedMovingRate ewmr = new TrueExponentiallyWeightedMovingRate(lambda, startTimeInMillis);
@@ -160,5 +160,15 @@ public class TrueExponentiallyWeightedMovingRateTests extends ESTestCase {
     public void testEwmr_negativeLambdaThrowsOnConstruction() {
         long startTimeInMillis = 1234567;
         assertThrows(IllegalArgumentException.class, () -> new TrueExponentiallyWeightedMovingRate(-1.0e-6, startTimeInMillis));
+    }
+
+    public void testEwmr_zeroStartTimeInMillis() {
+        double lambda = 1.0e-6; // equivalent to half-life of log(2.0) * 1.0e6
+        assertThrows(IllegalArgumentException.class, () -> new TrueExponentiallyWeightedMovingRate(lambda, 0));
+    }
+
+    public void testEwmr_negativeStartTimeInMillis() {
+        double lambda = 1.0e-6; // equivalent to half-life of log(2.0) * 1.0e6
+        assertThrows(IllegalArgumentException.class, () -> new TrueExponentiallyWeightedMovingRate(lambda, -1));
     }
 }
