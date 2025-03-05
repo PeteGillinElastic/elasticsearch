@@ -49,16 +49,25 @@ public class TrueExponentiallyWeightedMovingRateTests extends ESTestCase {
         for (int i = 1; i <= numIncrements; i++) {
             ewmr.addIncrement(effectiveRate * intervalMillis, START_TIME_IN_MILLIS + intervalMillis * i);
         }
-        // Expected rate is effectiveRate - use wider tolerance here as we don't expect the EWMR to match the effective rate super closely:
+        // Expected rate is roughly effectiveRate - use wider tolerance here as we this is an approximation:
         assertThat(ewmr.getRate(START_TIME_IN_MILLIS + intervalMillis * numIncrements), closeTo(effectiveRate, 0.001));
     }
 
-    public void testEwmr_longGapBetweenValues() {
+    public void testEwmr_longGapBetweenValues_higherRecentValue() {
         TrueExponentiallyWeightedMovingRate ewmr = new TrueExponentiallyWeightedMovingRate(LAMBDA, START_TIME_IN_MILLIS);
         ewmr.addIncrement(10.0, START_TIME_IN_MILLIS + 1000);
         ewmr.addIncrement(20.0, START_TIME_IN_MILLIS + 2_000_000);
         double expected2000000 = LAMBDA * (20.0 + 10.0 * exp(-1.0 * LAMBDA * 1_999_000)) / (1.0 - exp(-1.0 * LAMBDA * 2_000_000));
         // 0.000021... (more than 30 / 2000000 = 0.000015 because the gap is twice the half-life and we favour the recent increment)
+        assertThat(ewmr.getRate(START_TIME_IN_MILLIS + 2_000_000), closeTo(expected2000000, TOLERANCE));
+    }
+
+    public void testEwmr_longGapBetweenValues_lowerRecentValue() {
+        TrueExponentiallyWeightedMovingRate ewmr = new TrueExponentiallyWeightedMovingRate(LAMBDA, START_TIME_IN_MILLIS);
+        ewmr.addIncrement(20.0, START_TIME_IN_MILLIS + 1000);
+        ewmr.addIncrement(10.0, START_TIME_IN_MILLIS + 2_000_000);
+        double expected2000000 = LAMBDA * (10.0 + 20.0 * exp(-1.0 * LAMBDA * 1_999_000)) / (1.0 - exp(-1.0 * LAMBDA * 2_000_000));
+        // 0.000014... (less than 30 / 2000000 = 0.000015 because the gap is twice the half-life and we favour the recent increment)
         assertThat(ewmr.getRate(START_TIME_IN_MILLIS + 2_000_000), closeTo(expected2000000, TOLERANCE));
     }
 
