@@ -43,16 +43,57 @@ public class TrueExponentiallyWeightedMovingRateTests extends ESTestCase {
     }
 
     public void testEwmr_longSeriesEvenRate() {
-        long intervalMillis = 5000;
-        double effectiveRate = 0.123;
         TrueExponentiallyWeightedMovingRate ewmr = new TrueExponentiallyWeightedMovingRate(LAMBDA, START_TIME_IN_MILLIS);
         // Do loads of updates of size effectiveRate * intervalMillis ever intervalMillis:
+        long intervalMillis = 5000;
         int numIncrements = 100_000;
+        double effectiveRate = 0.123;
         for (int i = 1; i <= numIncrements; i++) {
             ewmr.addIncrement(effectiveRate * intervalMillis, START_TIME_IN_MILLIS + intervalMillis * i);
         }
         // Expected rate is roughly effectiveRate - use wider tolerance here as we this is an approximation:
         assertThat(ewmr.getRate(START_TIME_IN_MILLIS + intervalMillis * numIncrements), closeTo(effectiveRate, 0.001));
+    }
+
+    public void testEwmr_longSeriesWithStepChangeInRate_fitsHalfLife() {
+        TrueExponentiallyWeightedMovingRate ewmr = new TrueExponentiallyWeightedMovingRate(LAMBDA, START_TIME_IN_MILLIS);
+        long intervalMillis = 1000;
+
+        // Phase 1: numIncrements1 increments at effective rate effectiveRate1 (increment size effectiveRate1 * intervalMillis):
+        int numIncrements1 = 100_000; // 100_000 increments at intervals of 1000ms take 100_000_000ms, or 100 half-lives
+        double effectiveRate1 = 0.123;
+        for (int i = 1; i <= numIncrements1; i++) {
+            ewmr.addIncrement(effectiveRate1 * intervalMillis, START_TIME_IN_MILLIS + intervalMillis * i);
+        }
+        // Expected rate is roughly effectiveRate1 - use wider tolerance here as we this is an approximation:
+        assertThat(ewmr.getRate(START_TIME_IN_MILLIS + intervalMillis * numIncrements1), closeTo(effectiveRate1, 0.001));
+
+        // Phase 2a: numIncrements2a increments at effective rate effectiveRate2 (increment size effectiveRate2 * intervalMillis):
+        long phase2aStartTimeMillis = START_TIME_IN_MILLIS + intervalMillis * numIncrements1;
+        int numIncrements2a = 1000; // 1000 increments at intervals of 1000ms take 1_000_000ms, or exactly one half-life
+        double effectiveRate2 = 0.345;
+        // Do the first increment at the higher rate:
+        ewmr.addIncrement(effectiveRate2 * intervalMillis, phase2aStartTimeMillis + intervalMillis);
+        // The first of the 1000 increments we're doing at the higher rate shouldn't make much difference, we still get effectiveRate1:
+        assertThat(ewmr.getRate(phase2aStartTimeMillis + intervalMillis), closeTo(effectiveRate1, 0.001));
+        // Now do the rest of the 1000 increments:
+        for (int i = 2; i <= numIncrements2a; i++) {
+            ewmr.addIncrement(effectiveRate2 * intervalMillis, phase2aStartTimeMillis + intervalMillis * i);
+        }
+        // Since we have been at effectiveRate2 for one half-life, and we were at effectiveRate1 for 100 half-lives (which is effectively
+        // forever) before that, we expect the rate to be roughly the mean of the two rates:
+        double expectedRate = 0.5 * (effectiveRate1 + effectiveRate2);
+        assertThat(ewmr.getRate(phase2aStartTimeMillis + intervalMillis * numIncrements2a), closeTo(expectedRate, 0.001));
+
+        // Phase 2b: numIncrements2b increments at effective rate effectiveRate2 (increment size effectiveRate2 * intervalMillis):
+        long phase2bStartTimeMillis = phase2aStartTimeMillis + intervalMillis * numIncrements2a;
+        int numIncrements2b = 9000; // 9000 increments at intervals of 1000ms take 9_000_000ms, or 9 half-lives
+        for (int i = 1; i <= numIncrements2b; i++) {
+            ewmr.addIncrement(effectiveRate2 * intervalMillis, phase2bStartTimeMillis + intervalMillis * i);
+        }
+        // Since we have been at effectiveRate2 for 10 half-lives (which is effectively forever) across phases 2a and 2b, that's now the
+        // approximate expected rate:
+        assertThat(ewmr.getRate(phase2bStartTimeMillis + intervalMillis * numIncrements2b), closeTo(effectiveRate2, 0.001));
     }
 
     public void testEwmr_longGapBetweenValues_higherRecentValue() {
