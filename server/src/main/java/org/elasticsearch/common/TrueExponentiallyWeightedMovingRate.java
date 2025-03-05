@@ -50,11 +50,23 @@ public class TrueExponentiallyWeightedMovingRate {
     }
 
     /**
-     * Returns the EWMR as it would have been at the time of the last increment. If no increments have yet been added, returns
-     * {@link Double#NaN}.
+     * Returns the EWMR at the given time, in millis since the epoch.
+     *
+     * <p>If there have been no increments yet, this returns zero.
+     *
+     * <p>Otherwise, we require the time to be no earlier than the time of the previous increment, i.e. the value of {@code timeInMillis}
+     * for this call must not be less than the value of {@code timeInMillis} for the last call to {@link #addIncrement}. If this is not the
+     * case, the method behaves as if it had that minimum value.
      */
-    public double getRate() {
-        return rate;
+    public double getRate(long timeInMillis) {
+        if (count == 0) {
+            return 0.0;
+        } else if (timeInMillis <= lastTimeInMillis) {
+            return rate;
+        } else {
+            return expHelper(lambda, lastTimeInMillis - startTimeInMillis) * exp(-1.0 * lambda * (timeInMillis - lastTimeInMillis)) * rate
+                / expHelper(lambda, timeInMillis - startTimeInMillis);
+        }
     }
 
     /**
