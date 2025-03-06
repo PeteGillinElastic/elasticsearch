@@ -17,11 +17,9 @@ import static java.lang.Math.expm1;
  * some sort of gauge which gives a value for the rate at which the gauge is being incremented where the weight given to an increment
  * decreases exponentially with how long ago it happened.
  *
- * <p><b>Warning</b>: This implementation is <b>not</b> thread-safe.
+ * <p>This class is thread-safe.
  */
 public class TrueExponentiallyWeightedMovingRate {
-
-    // TODO: Think about thread safety.
 
     private final double lambda;
     private final long startTimeInMillis;
@@ -45,10 +43,12 @@ public class TrueExponentiallyWeightedMovingRate {
         if (startTimeInMillis <= 0.0) {
             throw new IllegalArgumentException("lambda must be non-negative but was " + startTimeInMillis);
         }
-        this.lambda = lambda;
-        this.rate = Double.NaN; // should never be used
-        this.startTimeInMillis = startTimeInMillis;
-        this.lastTimeInMillis = 0; // after an increment, this must be positive, so a zero value indicates we're waiting for the first one
+        synchronized (this) {
+            this.lambda = lambda;
+            this.rate = Double.NaN; // should never be used
+            this.startTimeInMillis = startTimeInMillis;
+            this.lastTimeInMillis = 0; // after an increment, this must be positive, so a zero value indicates we're waiting for the first
+        }
     }
 
     /**
@@ -61,13 +61,15 @@ public class TrueExponentiallyWeightedMovingRate {
      * case, the method behaves as if it had that minimum value.
      */
     public double getRate(long timeInMillis) {
-        if (lastTimeInMillis == 0) { // indicates that no increment has happened yet
-            return 0.0;
-        } else if (timeInMillis <= lastTimeInMillis) {
-            return rate;
-        } else {
-            return expHelper(lambda, lastTimeInMillis - startTimeInMillis) * exp(-1.0 * lambda * (timeInMillis - lastTimeInMillis)) * rate
-                / expHelper(lambda, timeInMillis - startTimeInMillis);
+        synchronized (this) {
+            if (lastTimeInMillis == 0) { // indicates that no increment has happened yet
+                return 0.0;
+            } else if (timeInMillis <= lastTimeInMillis) {
+                return rate;
+            } else {
+                return expHelper(lambda, lastTimeInMillis - startTimeInMillis) * exp(-1.0 * lambda * (timeInMillis - lastTimeInMillis))
+                    * rate / expHelper(lambda, timeInMillis - startTimeInMillis);
+            }
         }
     }
 
@@ -84,21 +86,23 @@ public class TrueExponentiallyWeightedMovingRate {
      * method behaves as if this call's {@code timeInMillis} is the same as the previous call's.
      */
     public void addIncrement(double increment, long timeInMillis) {
-        if (lastTimeInMillis == 0) { // indicates that this is the first increment
-            if (timeInMillis <= startTimeInMillis) {
-                timeInMillis = startTimeInMillis + 1;
+        synchronized (this) {
+            if (lastTimeInMillis == 0) { // indicates that this is the first increment
+                if (timeInMillis <= startTimeInMillis) {
+                    timeInMillis = startTimeInMillis + 1;
+                }
+                rate = increment / expHelper(lambda, timeInMillis - startTimeInMillis);
+            } else {
+                if (timeInMillis < lastTimeInMillis) {
+                    timeInMillis = lastTimeInMillis;
+                }
+                rate += (increment - expHelper(lambda, timeInMillis - lastTimeInMillis) * rate) / expHelper(
+                    lambda,
+                    timeInMillis - startTimeInMillis
+                );
             }
-            rate = increment / expHelper(lambda, timeInMillis - startTimeInMillis);
-        } else {
-            if (timeInMillis < lastTimeInMillis) {
-                timeInMillis = lastTimeInMillis;
-            }
-            rate += (increment - expHelper(lambda, timeInMillis - lastTimeInMillis) * rate) / expHelper(
-                lambda,
-                timeInMillis - startTimeInMillis
-            );
+            lastTimeInMillis = timeInMillis;
         }
-        lastTimeInMillis = timeInMillis;
     }
 
     /**

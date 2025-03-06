@@ -11,6 +11,11 @@ package org.elasticsearch.common;
 
 import org.elasticsearch.test.ESTestCase;
 
+import java.util.ArrayList;
+import java.util.List;
+import java.util.stream.DoubleStream;
+import java.util.stream.IntStream;
+
 import static java.lang.Math.exp;
 import static java.lang.Math.expm1;
 import static org.hamcrest.Matchers.closeTo;
@@ -202,4 +207,31 @@ public class TrueExponentiallyWeightedMovingRateTests extends ESTestCase {
     public void testEwmr_negativeStartTimeInMillis() {
         assertThrows(IllegalArgumentException.class, () -> new TrueExponentiallyWeightedMovingRate(LAMBDA, -1));
     }
+
+    public void testEwmr_threadSafe() throws InterruptedException {
+        TrueExponentiallyWeightedMovingRate ewmr = new TrueExponentiallyWeightedMovingRate(LAMBDA, START_TIME_IN_MILLIS);
+        int numRoundsOfIncrements = 20; // We will do this many rounds of increments
+        long intervalMillis = 50_000; // This is the interval between each round of increments
+        int numThreads = 1000; // In each round, we will do this many concurrent updates, each on its own thread, all at the same timestamp
+        List<Double> totalIncrementsPerRound = new ArrayList<>(); // We will store the total increment for each round in this list
+        for (int round = 1; round <= numRoundsOfIncrements; round++) {
+            long timeInMillis = START_TIME_IN_MILLIS + round * intervalMillis;
+            double[] incrementsForRound = DoubleStream.generate(() -> randomDoubleBetween(1.0, 100.0, true)).limit(numThreads).toArray();
+            List<Thread> threads = DoubleStream.of(incrementsForRound)
+                .mapToObj(increment -> new Thread(() -> ewmr.addIncrement(increment, timeInMillis)))
+                .toList();
+            for (Thread thread : threads) {
+                thread.start();
+            }
+            for (Thread thread : threads) {
+                thread.join();
+            }
+            totalIncrementsPerRound.add(DoubleStream.of(incrementsForRound).sum());
+        }
+        double expectedEwmr = LAMBDA * IntStream.range(0, numRoundsOfIncrements)
+            .mapToDouble(i -> totalIncrementsPerRound.get(i) * exp(-1.0 * LAMBDA * (numRoundsOfIncrements - 1 - i) * intervalMillis))
+            .sum() / (1.0 - exp(-1.0 * LAMBDA * numRoundsOfIncrements * intervalMillis));
+        assertThat(ewmr.getRate(START_TIME_IN_MILLIS + numRoundsOfIncrements * intervalMillis), closeTo(expectedEwmr, TOLERANCE));
+    }
+
 }
