@@ -67,8 +67,8 @@ public class TrueExponentiallyWeightedMovingRate {
             } else if (timeInMillis <= lastTimeInMillis) {
                 return rate;
             } else {
-                return expHelper(lambda, lastTimeInMillis - startTimeInMillis) * exp(-1.0 * lambda * (timeInMillis - lastTimeInMillis))
-                    * rate / expHelper(lambda, timeInMillis - startTimeInMillis);
+                return expHelper(lastTimeInMillis - startTimeInMillis) * exp(-1.0 * lambda * (timeInMillis - lastTimeInMillis)) * rate
+                    / expHelper(timeInMillis - startTimeInMillis);
             }
         }
     }
@@ -91,15 +91,12 @@ public class TrueExponentiallyWeightedMovingRate {
                 if (timeInMillis <= startTimeInMillis) {
                     timeInMillis = startTimeInMillis + 1;
                 }
-                rate = increment / expHelper(lambda, timeInMillis - startTimeInMillis);
+                rate = increment / expHelper(timeInMillis - startTimeInMillis);
             } else {
                 if (timeInMillis < lastTimeInMillis) {
                     timeInMillis = lastTimeInMillis;
                 }
-                rate += (increment - expHelper(lambda, timeInMillis - lastTimeInMillis) * rate) / expHelper(
-                    lambda,
-                    timeInMillis - startTimeInMillis
-                );
+                rate += (increment - expHelper(timeInMillis - lastTimeInMillis) * rate) / expHelper(timeInMillis - startTimeInMillis);
             }
             lastTimeInMillis = timeInMillis;
         }
@@ -110,8 +107,7 @@ public class TrueExponentiallyWeightedMovingRate {
      * should not be subject to numerical instability when {@code lambda * time} is small. Returns {@code time} when {@code lambda = 0},
      * which is the correct limit.
      */
-    private double expHelper(double lambda, double time) {
-        assert lambda >= 0.0;
+    private double expHelper(double time) {
         assert time >= 0.0;
         double lambdaTime = lambda * time;
         if (lambdaTime >= 1.0e-2) {
