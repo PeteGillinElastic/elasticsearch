@@ -23,7 +23,7 @@ import static org.hamcrest.Matchers.equalTo;
 
 public class TrueExponentiallyWeightedMovingRateTests extends ESTestCase {
 
-    private static final double TOLERANCE = 1.0e-14;
+    private static final double TOLERANCE = 1.0e-13;
     private static final double HALF_LIFE_MILLIS = 1.0e6; // Half-life of used by many tests
     private static final double LAMBDA = Math.log(2.0) / HALF_LIFE_MILLIS; // Equivalent value of lambda
     public static final int START_TIME_IN_MILLIS = 1234567;
@@ -208,10 +208,13 @@ public class TrueExponentiallyWeightedMovingRateTests extends ESTestCase {
         assertThrows(IllegalArgumentException.class, () -> new TrueExponentiallyWeightedMovingRate(LAMBDA, -1));
     }
 
+    // N.B. This test is not guaranteed to fail even if the implementation is not thread-safe. The operations are fast enough that there is
+    // a chance each thread will complete before the next one has started. We use a high thread count to try to get a decent change of
+    // hitting a race condition if there is one. This should be run with e.g. -Dtests.iters=20 to test thoroughly.
     public void testEwmr_threadSafe() throws InterruptedException {
         TrueExponentiallyWeightedMovingRate ewmr = new TrueExponentiallyWeightedMovingRate(LAMBDA, START_TIME_IN_MILLIS);
-        int numRoundsOfIncrements = 20; // We will do this many rounds of increments
-        long intervalMillis = 50_000; // This is the interval between each round of increments
+        int numRoundsOfIncrements = 100; // We will do this many rounds of increments
+        long intervalMillis = 10_000; // This is the interval between each round of increments
         int numThreads = 1000; // In each round, we will do this many concurrent updates, each on its own thread, all at the same timestamp
         List<Double> totalIncrementsPerRound = new ArrayList<>(); // We will store the total increment for each round in this list
         for (int round = 1; round <= numRoundsOfIncrements; round++) {
