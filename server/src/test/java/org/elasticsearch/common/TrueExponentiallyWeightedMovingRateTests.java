@@ -237,4 +237,90 @@ public class TrueExponentiallyWeightedMovingRateTests extends ESTestCase {
         assertThat(ewmr.getRate(START_TIME_IN_MILLIS + numRoundsOfIncrements * intervalMillis), closeTo(expectedEwmr, TOLERANCE));
     }
 
+    public void testCalculateRateSince() {
+        TrueExponentiallyWeightedMovingRate ewmr = new TrueExponentiallyWeightedMovingRate(LAMBDA, START_TIME_IN_MILLIS);
+
+        // Do a first batch of updates, then get and assert on the EWMR calculated for them some time after the last of them:
+        ewmr.addIncrement(80.0, START_TIME_IN_MILLIS + 100_000);
+        ewmr.addIncrement(90.0, START_TIME_IN_MILLIS + 200_000);
+        ewmr.addIncrement(70.0, START_TIME_IN_MILLIS + 300_000);
+        double expectedFirstBatch = LAMBDA * (exp(-1.0 * LAMBDA * 100_000) * 70.0 + exp(-1.0 * LAMBDA * 200_000) * 90.0 + exp(
+            -1.0 * LAMBDA * 300_000
+        ) * 80.0) / (1.0 - exp(-1.0 * LAMBDA * 400_000));
+        double ewmrFirstBatch = ewmr.getRate(START_TIME_IN_MILLIS + 400_000);
+        assertThat(ewmrFirstBatch, closeTo(expectedFirstBatch, TOLERANCE));
+
+        // Do a second batch of updates, then get and assert on the EWMR calculated for them some time after the last of them (including
+        // all the updates since the start time, i.e. the updates from both batches):
+        ewmr.addIncrement(20.0, START_TIME_IN_MILLIS + 500_000);
+        ewmr.addIncrement(30.0, START_TIME_IN_MILLIS + 600_000);
+        ewmr.addIncrement(10.0, START_TIME_IN_MILLIS + 700_000);
+        ewmr.addIncrement(40.0, START_TIME_IN_MILLIS + 800_000);
+        double expectedBothBatches = LAMBDA * (exp(-1.0 * LAMBDA * 100_000) * 40.0 + exp(-1.0 * LAMBDA * 200_000) * 10.0 + exp(
+            -1.0 * LAMBDA * 300_000
+        ) * 30.0 + exp(-1.0 * LAMBDA * 400_000) * 20.0 + exp(-1.0 * LAMBDA * 600_000) * 70.0 + exp(-1.0 * LAMBDA * 700_000) * 90.0 + exp(
+            -1.0 * LAMBDA * 800_000
+        ) * 80.0) / (1.0 - exp(-1.0 * LAMBDA * 900_000));
+        double ewmrBothBatches = ewmr.getRate(START_TIME_IN_MILLIS + 900_000);
+        assertThat(ewmrBothBatches, closeTo(expectedBothBatches, TOLERANCE));
+
+        // Get and assert on the EWMR calculated as if the calculation started at the point we got the rate after the first batch of
+        // increments. Note that the expected value depends only on the second batch of increments.
+        double expectedSecondBatchOnly = LAMBDA * (exp(-1.0 * LAMBDA * 100_000) * 40.0 + exp(-1.0 * LAMBDA * 200_000) * 10.0 + exp(
+            -1.0 * LAMBDA * 300_000
+        ) * 30.0 + exp(-1.0 * LAMBDA * 400_000) * 20.0) / (1.0 - exp(-1.0 * LAMBDA * 500_000));
+        double calculatedSecondBatchOnly = ewmr.calculateRateSince(
+            START_TIME_IN_MILLIS + 900_000,
+            ewmrBothBatches,
+            START_TIME_IN_MILLIS + 400_000,
+            ewmrFirstBatch
+        );
+        assertThat(calculatedSecondBatchOnly, closeTo(expectedSecondBatchOnly, TOLERANCE));
+
+        // Double check this result by directly calculating the EWMR with the later start time and the second batch of updates.
+        TrueExponentiallyWeightedMovingRate ewmr2 = new TrueExponentiallyWeightedMovingRate(LAMBDA, START_TIME_IN_MILLIS + 400_000);
+        ewmr2.addIncrement(20.0, START_TIME_IN_MILLIS + 500_000);
+        ewmr2.addIncrement(30.0, START_TIME_IN_MILLIS + 600_000);
+        ewmr2.addIncrement(10.0, START_TIME_IN_MILLIS + 700_000);
+        ewmr2.addIncrement(40.0, START_TIME_IN_MILLIS + 800_000);
+        double directEwmrSecondBatchOnly = ewmr2.getRate(START_TIME_IN_MILLIS + 900_000);
+        assertThat(calculatedSecondBatchOnly, closeTo(directEwmrSecondBatchOnly, TOLERANCE));
+    }
+
+    public void testCalculateRateSince_noMoreIncrements() {
+        TrueExponentiallyWeightedMovingRate ewmr = new TrueExponentiallyWeightedMovingRate(LAMBDA, START_TIME_IN_MILLIS);
+
+        // Do a batch of updates, then get and assert on the EWMR calculated for them some time after the last of them:
+        ewmr.addIncrement(80.0, START_TIME_IN_MILLIS + 100_000);
+        ewmr.addIncrement(90.0, START_TIME_IN_MILLIS + 200_000);
+        ewmr.addIncrement(70.0, START_TIME_IN_MILLIS + 300_000);
+        double expected400k = LAMBDA * (exp(-1.0 * LAMBDA * 100_000) * 70.0 + exp(-1.0 * LAMBDA * 200_000) * 90.0 + exp(
+            -1.0 * LAMBDA * 300_000
+        ) * 80.0) / (1.0 - exp(-1.0 * LAMBDA * 400_000));
+        double ewmr400k = ewmr.getRate(START_TIME_IN_MILLIS + 400_000);
+        assertThat(ewmr400k, closeTo(expected400k, TOLERANCE));
+
+        // Without doing any more updates, get and assert on the EWMR calculated for a later time:
+        double expected500k = LAMBDA * (exp(-1.0 * LAMBDA * 200_000) * 70.0 + exp(-1.0 * LAMBDA * 300_000) * 90.0 + exp(
+            -1.0 * LAMBDA * 400_000
+        ) * 80.0) / (1.0 - exp(-1.0 * LAMBDA * 500_000));
+        double ewmr500k = ewmr.getRate(START_TIME_IN_MILLIS + 500_000);
+        assertThat(ewmr500k, closeTo(expected500k, TOLERANCE));
+
+        // Get and assert on the EWMR for the interval between the two rates we got, which should be zero are there are no updates:
+        assertThat(
+            ewmr.calculateRateSince(START_TIME_IN_MILLIS + 500_000, ewmr500k, START_TIME_IN_MILLIS + 400_000, ewmr400k),
+            closeTo(0.0, TOLERANCE) // still need an approximate check as floating point errors mean it won't be exactly zero
+        );
+    }
+
+    public void testCalculateRateSince_currentTimeNotAfterOldTime() {
+        TrueExponentiallyWeightedMovingRate ewmr = new TrueExponentiallyWeightedMovingRate(LAMBDA, START_TIME_IN_MILLIS);
+        // The method contract says calculateRateSince should return 0.0 if currentTimeMillis is the same as or earlier than oldTimeMillis.
+        // This is the case whether the rates are the same or different.
+        assertThat(ewmr.calculateRateSince(START_TIME_IN_MILLIS + 1000, 123.0, START_TIME_IN_MILLIS + 1000, 123.0), equalTo(0.0));
+        assertThat(ewmr.calculateRateSince(START_TIME_IN_MILLIS + 1000, 123.0, START_TIME_IN_MILLIS + 1000, 456), equalTo(0.0));
+        assertThat(ewmr.calculateRateSince(START_TIME_IN_MILLIS + 500, 123.0, START_TIME_IN_MILLIS + 1000, 123.0), equalTo(0.0));
+        assertThat(ewmr.calculateRateSince(START_TIME_IN_MILLIS + 500, 123.0, START_TIME_IN_MILLIS + 1000, 456), equalTo(0.0));
+    }
 }

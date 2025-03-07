@@ -74,6 +74,27 @@ public class TrueExponentiallyWeightedMovingRate {
     }
 
     /**
+     * Given the EWMR {@code currentRate} at time {@code currentTimeMillis} and the EWMR {@code oldRate} at time {@code oldTimeMillis},
+     * returns the EWMR that would be calculated at {@code currentTimeMillis} if the start time was {@code oldTimeMillis} rather than the
+     * {@code startTimeMillis} passed to the parameter. This rate incorporates all the increments that contributed to {@code currentRate}
+     * but not to {@code oldRate}. The increments that contributed to {@code oldRate} are effectively 'forgotten'. All times are in millis
+     * since the epoch.
+     *
+     * <p>Normally, {@code currentTimeMillis} should be after {@code oldTimeMillis}. If it is not, this method returns zero.
+     *
+     * <p>Note that this method does <i>not</i> depend on any of the increments made to this {@link TrueExponentiallyWeightedMovingRate}
+     * instance, or on its {@code startTimeMillis}. It is only non-static because it uses this instance's {@code lambda}.
+     */
+    public double calculateRateSince(long currentTimeMillis, double currentRate, long oldTimeMillis, double oldRate) {
+        if (currentTimeMillis <= oldTimeMillis) {
+            return 0.0;
+        }
+        return (expHelper(currentTimeMillis - startTimeInMillis) * currentRate - expHelper(oldTimeMillis - startTimeInMillis) * exp(
+            -1.0 * lambda * (currentTimeMillis - oldTimeMillis)
+        ) * oldRate) / expHelper(currentTimeMillis - oldTimeMillis);
+    }
+
+    /**
      * Updates the rate to reflect that the gauge has been incremented by an amount {@code increment} at a time {@code timeInMillis} in
      * milliseconds since the epoch.
      *
