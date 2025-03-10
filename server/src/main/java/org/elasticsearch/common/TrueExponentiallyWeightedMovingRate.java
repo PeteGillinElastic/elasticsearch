@@ -28,6 +28,10 @@ import static java.lang.Math.expm1;
  */
 public class TrueExponentiallyWeightedMovingRate {
 
+    // This implementation uses synchronization to provide thread safety. The synchronized code is all non-blocking, and just performs a
+    // fixed small number of floating point operations plus some memory reads and writes. If they take somewhere in the region of 10ns each,
+    // we can do up to tens of millions of QPS before the lock risks becoming a bottleneck.
+
     private final double lambda;
     private final long startTimeInMillis;
     private double rate;
