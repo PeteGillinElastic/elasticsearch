@@ -30,20 +30,30 @@ public class TrueExponentiallyWeightedMovingRateTests extends ESTestCase {
 
     public void testEwmr() {
         TrueExponentiallyWeightedMovingRate ewmr = new TrueExponentiallyWeightedMovingRate(LAMBDA, START_TIME_IN_MILLIS);
+        // Assert on the rate returned without any increments, either at the start time or a bit later:
         assertThat(ewmr.getRate(START_TIME_IN_MILLIS), equalTo(0.0));
         assertThat(ewmr.getRate(START_TIME_IN_MILLIS + 900), equalTo(0.0));
+        // Do a first increment:
         ewmr.addIncrement(10.0, START_TIME_IN_MILLIS + 1000);
-        double expected1000 = LAMBDA * 10.0 / (1.0 - exp(-1.0 * LAMBDA * 1000));
-        // 0.010003... (~= 10 / 1000 - greater than that, because an update just happened and we favour recent values - but only
+        // Calculate the expected EWMR at 1000ms after the start time, i.e. the time of the last increment:
+        double expected1000 = 10.0 / ((1.0 - exp(-1.0 * LAMBDA * 1000)) / LAMBDA); // increment divided by integral of weights over interval
+        // That is 0.010003... (~= 10 / 1000 - greater than that, because an update just happened, and we favour recent values - but only
         // fractionally, because the time interval is a small fraction of the half-life)
         assertThat(ewmr.getRate(START_TIME_IN_MILLIS + 1000), closeTo(expected1000, TOLERANCE));
-        double expected1900 = LAMBDA * 10.0 * exp(-1.0 * LAMBDA * 900) / (1.0 - exp(-1.0 * LAMBDA * 1900)); // 0.005263... (~= 10 / 1900)
+        // Calculated the expected EWMR at 1900ms after the start time, i.e. 900ms after the time of the last update:
+        double expected1900 = 10.0 * exp(-1.0 * LAMBDA * 900) // weighted increment
+            / ((1.0 - exp(-1.0 * LAMBDA * 1900)) / LAMBDA); // integral of weights over interval
+        // That is 0.005263... (~= 10 / 1900)
         assertThat(ewmr.getRate(START_TIME_IN_MILLIS + 1900), closeTo(expected1900, TOLERANCE));
+        // Do two more increments:
         ewmr.addIncrement(12.0, START_TIME_IN_MILLIS + 2000);
         ewmr.addIncrement(8.0, START_TIME_IN_MILLIS + 2500);
-        double expected2500 = LAMBDA * (8.0 + 12.0 * exp(-1.0 * LAMBDA * 500) + 10.0 * exp(-1.0 * LAMBDA * 1500)) / (1.0 - exp(
-            -1.0 * LAMBDA * 2500
-        )); // 0.012005... (~= 30 / 2500)
+        // Calculate the expected weight at 2500ms after the start time, i.e. the time of the last increment:
+        double expected2500 = (10.0 * exp(-1.0 * LAMBDA * 1500) // first weighted increment
+            + 12.0 * exp(-1.0 * LAMBDA * 500) // second weighted increment
+            + 8.0) // third increment, with a weight of 1.0 as no time elapsed
+            / ((1.0 - exp(-1.0 * LAMBDA * 2500)) / LAMBDA); // integral of weight function
+        // That is 0.012005... (~= 30 / 2500)
         assertThat(ewmr.getRate(START_TIME_IN_MILLIS + 2500), closeTo(expected2500, TOLERANCE));
     }
 
@@ -52,6 +62,7 @@ public class TrueExponentiallyWeightedMovingRateTests extends ESTestCase {
         ewmr.addIncrement(10.0, START_TIME_IN_MILLIS + 1000);
         ewmr.addIncrement(20.0, START_TIME_IN_MILLIS + 1500);
         ewmr.addIncrement(15.0, START_TIME_IN_MILLIS + 2000);
+        // Calculate the expected weight at 2000ms after the start time, which is a simple unweighted rate since lambda is zero:
         double expected2000 = (10.0 + 20.0 + 15.0) / 2000; // 0.0225
         assertThat(ewmr.getRate(START_TIME_IN_MILLIS + 2000), closeTo(expected2000, TOLERANCE));
         // Should still get unweighted cumulative rate even if we wait a long time before the next increment:
@@ -131,7 +142,7 @@ public class TrueExponentiallyWeightedMovingRateTests extends ESTestCase {
         TrueExponentiallyWeightedMovingRate ewmr = new TrueExponentiallyWeightedMovingRate(LAMBDA, START_TIME_IN_MILLIS);
         ewmr.addIncrement(10.0, START_TIME_IN_MILLIS + 1000);
         ewmr.addIncrement(30.0, START_TIME_IN_MILLIS + 2_000_000);
-        double expected2000000 = LAMBDA * (30.0 + 10.0 * exp(-1.0 * LAMBDA * 1_999_000)) / (1.0 - exp(-1.0 * LAMBDA * 2_000_000));
+        double expected2000000 = (10.0 * exp(-1.0 * LAMBDA * 1_999_000) + 30.0) / ((1.0 - exp(-1.0 * LAMBDA * 2_000_000)) / LAMBDA);
         // 0.000030... (more than 40 / 2000000 = 0.000020 because the gap is twice the half-life and we favour the larger recent increment)
         assertThat(ewmr.getRate(START_TIME_IN_MILLIS + 2_000_000), closeTo(expected2000000, TOLERANCE));
     }
@@ -140,7 +151,7 @@ public class TrueExponentiallyWeightedMovingRateTests extends ESTestCase {
         TrueExponentiallyWeightedMovingRate ewmr = new TrueExponentiallyWeightedMovingRate(LAMBDA, START_TIME_IN_MILLIS);
         ewmr.addIncrement(30.0, START_TIME_IN_MILLIS + 1000);
         ewmr.addIncrement(10.0, START_TIME_IN_MILLIS + 2_000_000);
-        double expected2000000 = LAMBDA * (10.0 + 30.0 * exp(-1.0 * LAMBDA * 1_999_000)) / (1.0 - exp(-1.0 * LAMBDA * 2_000_000));
+        double expected2000000 = (30.0 * exp(-1.0 * LAMBDA * 1_999_000) + 10.0) / ((1.0 - exp(-1.0 * LAMBDA * 2_000_000)) / LAMBDA);
         // 0.000016... (less than 40 / 2000000 = 0.000020 because the gap is twice the half-life and we favour the smaller recent increment)
         assertThat(ewmr.getRate(START_TIME_IN_MILLIS + 2_000_000), closeTo(expected2000000, TOLERANCE));
     }
@@ -148,7 +159,7 @@ public class TrueExponentiallyWeightedMovingRateTests extends ESTestCase {
     public void testEwmr_longGapBeforeFirstValue() {
         TrueExponentiallyWeightedMovingRate ewmr = new TrueExponentiallyWeightedMovingRate(LAMBDA, START_TIME_IN_MILLIS);
         ewmr.addIncrement(10.0, START_TIME_IN_MILLIS + 2_000_000);
-        double expected2000000 = LAMBDA * 10.0 / (1.0 - exp(-1.0 * LAMBDA * 2_000_000));
+        double expected2000000 = 10.0 / ((1.0 - exp(-1.0 * LAMBDA * 2_000_000)) / LAMBDA);
         // 0.000009... (more than 10 / 2000000 = 0.000005 because the gap twice the half-life and we favour the recent increment)
         assertThat(ewmr.getRate(START_TIME_IN_MILLIS + 2_000_000), closeTo(expected2000000, TOLERANCE));
     }
@@ -158,9 +169,10 @@ public class TrueExponentiallyWeightedMovingRateTests extends ESTestCase {
         ewmr.addIncrement(10.0, START_TIME_IN_MILLIS + 1000);
         ewmr.addIncrement(12.0, START_TIME_IN_MILLIS + 2000);
         ewmr.addIncrement(8.0, START_TIME_IN_MILLIS + 2500);
-        double expected2000000 = LAMBDA * (8.0 * exp(-1.0 * LAMBDA * 1_997_500) + 12.0 * exp(-1.0 * LAMBDA * 1_998_000) + 10.0 * exp(
-            -1.0 * LAMBDA * 1_999_000
-        )) / (1.0 - exp(-1.0 * LAMBDA * 2_000_000));
+        double expected2000000 = (10.0 * exp(-1.0 * LAMBDA * 1_999_000) // first weighted increment
+            + 12.0 * exp(-1.0 * LAMBDA * 1_998_000) // second weighted increment
+            + 8.0 * exp(-1.0 * LAMBDA * 1_997_500)) // third weighted increment
+            / ((1.0 - exp(-1.0 * LAMBDA * 2_000_000)) / LAMBDA); // integral of weights over interval
         // 0.000007... (less than 30 / 2000000 = 0.000015 because the updates were nearly two half-lives ago)
         assertThat(ewmr.getRate(START_TIME_IN_MILLIS + 2_000_000), closeTo(expected2000000, TOLERANCE));
     }
@@ -170,7 +182,7 @@ public class TrueExponentiallyWeightedMovingRateTests extends ESTestCase {
         ewmr.addIncrement(10.0, START_TIME_IN_MILLIS);
         // The method contract states that we treat this as if the increment time was START_TIME_IN_MILLIS + 1:
         // N.B. We have to use expm1 here when calculating the expected value to avoid floating point error from 1.0 - exp(-1.0e-6).
-        double expected = -1.0 * LAMBDA * 10.0 / expm1(-1.0 * LAMBDA * 1); // 10.000003... (~= 10 / 1)
+        double expected = 10.0 / (-1.0 * expm1(-1.0 * LAMBDA * 1) / LAMBDA); // 10.000003... (~= 10 / 1)
         assertThat(ewmr.getRate(START_TIME_IN_MILLIS), closeTo(expected, TOLERANCE));
     }
 
@@ -179,7 +191,7 @@ public class TrueExponentiallyWeightedMovingRateTests extends ESTestCase {
         ewmr.addIncrement(10.0, START_TIME_IN_MILLIS + 1000);
         ewmr.addIncrement(20.0, START_TIME_IN_MILLIS + 900);
         // The method contract states that we treat this as if both increments happened at START_TIME_IN_MILLIS + 1000:
-        double expected900 = LAMBDA * (20.0 + 10.0) / (1.0 - exp(-1.0 * LAMBDA * 1000)); // 0.030010 (~= 30 / 1000)
+        double expected900 = (10.0 + 20.0) / ((1.0 - exp(-1.0 * LAMBDA * 1000)) / LAMBDA); // 0.030010 (~= 30 / 1000)
         assertThat(ewmr.getRate(START_TIME_IN_MILLIS + 900), closeTo(expected900, TOLERANCE));
     }
 
@@ -188,9 +200,11 @@ public class TrueExponentiallyWeightedMovingRateTests extends ESTestCase {
         ewmr.addIncrement(10.0, START_TIME_IN_MILLIS + 1000);
         ewmr.addIncrement(12.0, START_TIME_IN_MILLIS + 2000);
         ewmr.addIncrement(8.0, START_TIME_IN_MILLIS + 2500);
-        double expected2500 = LAMBDA * (8.0 + 12.0 * exp(-1.0 * LAMBDA * 500) + 10.0 * exp(-1.0 * LAMBDA * 1500)) / (1.0 - exp(
-            -1.0 * LAMBDA * 2500
-        )); // 0.012005... (~= 30 / 2500)
+        double expected2500 = (10.0 * exp(-1.0 * LAMBDA * 1500) // first weighted increment
+            + 12.0 * exp(-1.0 * LAMBDA * 500) // second weighted increment
+            + 8.0) // third increment
+            / ((1.0 - exp(-1.0 * LAMBDA * 2500)) / LAMBDA); // integral of weights over interval
+        // 0.012005... (~= 30 / 2500)
         // The method contract states that, if we ask for the rate at a time before the last increment, we get the rate at the time of the
         // last increment instead:
         assertThat(ewmr.getRate(START_TIME_IN_MILLIS + 2400), closeTo(expected2500, TOLERANCE));
@@ -231,9 +245,10 @@ public class TrueExponentiallyWeightedMovingRateTests extends ESTestCase {
             }
             totalIncrementsPerRound.add(DoubleStream.of(incrementsForRound).sum());
         }
-        double expectedEwmr = LAMBDA * IntStream.range(0, numRoundsOfIncrements)
+        double expectedEwmr = IntStream.range(0, numRoundsOfIncrements)
             .mapToDouble(i -> totalIncrementsPerRound.get(i) * exp(-1.0 * LAMBDA * (numRoundsOfIncrements - 1 - i) * intervalMillis))
-            .sum() / (1.0 - exp(-1.0 * LAMBDA * numRoundsOfIncrements * intervalMillis));
+            .sum() // sum of weighted increments
+            / ((1.0 - exp(-1.0 * LAMBDA * numRoundsOfIncrements * intervalMillis)) / LAMBDA); // integral of weights over interval
         assertThat(ewmr.getRate(START_TIME_IN_MILLIS + numRoundsOfIncrements * intervalMillis), closeTo(expectedEwmr, TOLERANCE));
     }
 
@@ -244,9 +259,11 @@ public class TrueExponentiallyWeightedMovingRateTests extends ESTestCase {
         ewmr.addIncrement(80.0, START_TIME_IN_MILLIS + 100_000);
         ewmr.addIncrement(90.0, START_TIME_IN_MILLIS + 200_000);
         ewmr.addIncrement(70.0, START_TIME_IN_MILLIS + 300_000);
-        double expectedFirstBatch = LAMBDA * (exp(-1.0 * LAMBDA * 100_000) * 70.0 + exp(-1.0 * LAMBDA * 200_000) * 90.0 + exp(
-            -1.0 * LAMBDA * 300_000
-        ) * 80.0) / (1.0 - exp(-1.0 * LAMBDA * 400_000));
+        double expectedFirstBatch = (90.0 * exp(-1.0 * LAMBDA * 200_000) // first weighted increment
+            + 80.0 * exp(-1.0 * LAMBDA * 300_000) // second weighted increment
+            + 70.0 * exp(-1.0 * LAMBDA * 100_000)) // third weighted increment
+            / ((1.0 - exp(-1.0 * LAMBDA * 400_000)) / LAMBDA); // integral of weights over interval
+        // That is 0.00059...
         double ewmrFirstBatch = ewmr.getRate(START_TIME_IN_MILLIS + 400_000);
         assertThat(ewmrFirstBatch, closeTo(expectedFirstBatch, TOLERANCE));
 
@@ -256,19 +273,26 @@ public class TrueExponentiallyWeightedMovingRateTests extends ESTestCase {
         ewmr.addIncrement(30.0, START_TIME_IN_MILLIS + 600_000);
         ewmr.addIncrement(10.0, START_TIME_IN_MILLIS + 700_000);
         ewmr.addIncrement(40.0, START_TIME_IN_MILLIS + 800_000);
-        double expectedBothBatches = LAMBDA * (exp(-1.0 * LAMBDA * 100_000) * 40.0 + exp(-1.0 * LAMBDA * 200_000) * 10.0 + exp(
-            -1.0 * LAMBDA * 300_000
-        ) * 30.0 + exp(-1.0 * LAMBDA * 400_000) * 20.0 + exp(-1.0 * LAMBDA * 600_000) * 70.0 + exp(-1.0 * LAMBDA * 700_000) * 90.0 + exp(
-            -1.0 * LAMBDA * 800_000
-        ) * 80.0) / (1.0 - exp(-1.0 * LAMBDA * 900_000));
+        double expectedBothBatches = (80.0 * exp(-1.0 * LAMBDA * 800_000) // first weighted increment from first batch
+            + 90.0 * exp(-1.0 * LAMBDA * 700_000) // second weighted increment from first batch
+            + 70.0 * exp(-1.0 * LAMBDA * 600_000) // third weighted increment from first batch
+            + 20.0 * exp(-1.0 * LAMBDA * 400_000) // first weighted increment from second batch
+            + 30.0 * exp(-1.0 * LAMBDA * 300_000) // second weighted increment from second batch
+            + 10.0 * exp(-1.0 * LAMBDA * 200_000) // third weighted increment from second batch
+            + 40.0 * exp(-1.0 * LAMBDA * 100_000))  // fourth weighted increment from second batch
+            / ((1.0 - exp(-1.0 * LAMBDA * 900_000)) / LAMBDA); // integral of weights over interval
+        // That is 0.00034...
         double ewmrBothBatches = ewmr.getRate(START_TIME_IN_MILLIS + 900_000);
         assertThat(ewmrBothBatches, closeTo(expectedBothBatches, TOLERANCE));
 
         // Get and assert on the EWMR calculated as if the calculation started at the point we got the rate after the first batch of
         // increments. Note that the expected value depends only on the second batch of increments.
-        double expectedSecondBatchOnly = LAMBDA * (exp(-1.0 * LAMBDA * 100_000) * 40.0 + exp(-1.0 * LAMBDA * 200_000) * 10.0 + exp(
-            -1.0 * LAMBDA * 300_000
-        ) * 30.0 + exp(-1.0 * LAMBDA * 400_000) * 20.0) / (1.0 - exp(-1.0 * LAMBDA * 500_000));
+        double expectedSecondBatchOnly = (20.0 * exp(-1.0 * LAMBDA * 400_000) // first weighted increment from second batch
+            + 30.0 * exp(-1.0 * LAMBDA * 300_000) // second weighted increment from second batch
+            + 10.0 * exp(-1.0 * LAMBDA * 200_000) // third weighted increment from second batch
+            + 40.0 * exp(-1.0 * LAMBDA * 100_000))  // fourth weighted increment from second batch
+            / ((1.0 - exp(-1.0 * LAMBDA * 500_000)) / LAMBDA); // integral of weights over interval
+        // That is 0.00020...
         double calculatedSecondBatchOnly = ewmr.calculateRateSince(
             START_TIME_IN_MILLIS + 900_000,
             ewmrBothBatches,
@@ -294,16 +318,20 @@ public class TrueExponentiallyWeightedMovingRateTests extends ESTestCase {
         ewmr.addIncrement(80.0, START_TIME_IN_MILLIS + 100_000);
         ewmr.addIncrement(90.0, START_TIME_IN_MILLIS + 200_000);
         ewmr.addIncrement(70.0, START_TIME_IN_MILLIS + 300_000);
-        double expected400k = LAMBDA * (exp(-1.0 * LAMBDA * 100_000) * 70.0 + exp(-1.0 * LAMBDA * 200_000) * 90.0 + exp(
-            -1.0 * LAMBDA * 300_000
-        ) * 80.0) / (1.0 - exp(-1.0 * LAMBDA * 400_000));
+        double expected400k = (80.0 * exp(-1.0 * LAMBDA * 300_000) // first weighted increment
+            + 90.0 * exp(-1.0 * LAMBDA * 200_000) // second weighted increment
+            + 70.0 * exp(-1.0 * LAMBDA * 100_000)) // third weighted increment
+            / ((1.0 - exp(-1.0 * LAMBDA * 400_000)) / LAMBDA); // integral of weights over interval
+        // That is 0.00059...
         double ewmr400k = ewmr.getRate(START_TIME_IN_MILLIS + 400_000);
         assertThat(ewmr400k, closeTo(expected400k, TOLERANCE));
 
         // Without doing any more updates, get and assert on the EWMR calculated for a later time:
-        double expected500k = LAMBDA * (exp(-1.0 * LAMBDA * 200_000) * 70.0 + exp(-1.0 * LAMBDA * 300_000) * 90.0 + exp(
-            -1.0 * LAMBDA * 400_000
-        ) * 80.0) / (1.0 - exp(-1.0 * LAMBDA * 500_000));
+        double expected500k = (80.0 * exp(-1.0 * LAMBDA * 400_000) // first weighted increment
+            + 90.0 * exp(-1.0 * LAMBDA * 300_000) // second weighted increment
+            + 70.0 * exp(-1.0 * LAMBDA * 200_000)) // third weighted increment
+            / ((1.0 - exp(-1.0 * LAMBDA * 500_000)) / LAMBDA); // integral of weights over interval
+        // That is 0.00045...
         double ewmr500k = ewmr.getRate(START_TIME_IN_MILLIS + 500_000);
         assertThat(ewmr500k, closeTo(expected500k, TOLERANCE));
 
