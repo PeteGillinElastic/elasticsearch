@@ -14,8 +14,15 @@ import static java.lang.Math.expm1;
 
 /**
  * Implements a version of an exponentially weighted moving rate (EWMR). This is a calculation over a finite time series of increments to
- * some sort of gauge which gives a value for the rate at which the gauge is being incremented where the weight given to an increment
- * decreases exponentially with how long ago it happened.
+ * some sort of gauge or counter which gives a value for the rate at which the gauge is being incremented where the weight given to an
+ * increment decreases exponentially with how long ago it happened.
+ *
+ * <p>Definitions: The <i>rate</i> of increase of the gauge or counter over an interval is the sum of the increments which occurred during
+ * the interval, divided by the length of the interval. The <i>weighted</i> rate of increase is the sum of the increments with each
+ * multiplied by a weight which is a function of how long ago it happened, divided by the integral of the weight function over the interval.
+ * The <i>exponentially</i> weighted rate is the weighted rate when the weight function is given by {@code exp(-1.0 * lambda * time)} where
+ * {@code lambda} is a constant and {@code time} specifies how long ago the increment happened. A <i>moving</i> rate is simply a rate
+ * calculated for an every-growing series of increments (typically by updating the previous rate rather than recalculating from scratch).
  *
  * <p>This class is thread-safe.
  */
